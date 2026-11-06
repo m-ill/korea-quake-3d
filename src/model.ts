@@ -47,7 +47,7 @@ export function readState(search:string,end:string):Partial<Filters> & {event?:s
   const p=new URLSearchParams(search); const out:Partial<Filters> & {event?:string;scale?:number}={};
   if(p.get('region')==='eastasia')out.region='eastasia';
   for(const key of ['from','to'] as const) { const v=p.get(key); if(v && validDate(v) && v>='1978-01-01' && v<=end)out[key]=v; }
-  for(const [key,min,max] of [['minMag',0,9],['maxDepth',0,700],['scale',1,10]] as const) {
+  for(const [key,min,max] of [['minMag',0,7],['maxDepth',0,700],['scale',1,10]] as const) {
     const v=p.get(key);if(v!==null && Number.isFinite(Number(v)) && Number(v)>=min && Number(v)<=max) out[key]=Number(v);
   }
   for(const key of ['unknown','kma','usgs'] as const) if(p.has(key))out[key]=p.get(key)==='1';

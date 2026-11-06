@@ -20,8 +20,8 @@ async function boot(){
   const [c,m]=await Promise.all(['catalog.json','map.json'].map(async file=>{const r=await fetch(`${base}data/${file}`);if(!r.ok)throw new Error(`${file} HTTP ${r.status}`);return r.json();}));
   catalog=c as Catalog;const map=m as MapData;
   if(catalog.schemaVersion!==1||!Array.isArray(catalog.events)||!catalog.events.length||!Array.isArray(map.polygons))throw new Error('데이터 형식이 올바르지 않습니다.');
-  const shared=readState(location.search,catalog.snapshotEnd);const region=shared.region??'korea';
-  filters={region,from:'2016-01-01',to:catalog.snapshotEnd,minMag:2,maxDepth:REGIONS[region].depth,unknown:true,kma:true,usgs:true,...shared};scale=shared.scale??REGIONS[region].scale;
+  const {event:sharedEvent,scale:sharedScale,...sharedFilters}=readState(location.search,catalog.snapshotEnd);const region=sharedFilters.region??'korea';
+  filters={region,from:'2016-01-01',to:catalog.snapshotEnd,minMag:2,maxDepth:REGIONS[region].depth,unknown:true,kma:true,usgs:true,...sharedFilters};scale=sharedScale??REGIONS[region].scale;
   if(filters.from>filters.to)filters.from=filters.to;
   app.innerHTML=`
     <header class="app-header">
@@ -68,7 +68,7 @@ async function boot(){
   try { scene=new QuakeScene($('#map-canvas'),map,selectEvent);scene.setRegion(filters.region); }
   catch(error){$('#map-canvas').innerHTML='<div class="webgl-error"><h3>3D 지도를 시작하지 못했습니다</h3><p>브라우저의 하드웨어 가속과 WebGL 지원을 확인해주세요.<br>오른쪽 지진 목록과 CSV 다운로드는 계속 사용할 수 있습니다.</p></div>';console.error(error);}
   bind();syncControls();resetTimeline();refresh();
-  if(shared.event){const e=visible.find(e=>e.id===shared.event);if(e)selectEvent(e);}
+  if(sharedEvent){const e=visible.find(e=>e.id===sharedEvent);if(e)selectEvent(e);}
 }
 function syncControls(){
   for(const key of ['from','to'] as const)$<HTMLInputElement>(`#${key}`).value=filters[key];
