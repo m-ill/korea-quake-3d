@@ -17,7 +17,7 @@ document.documentElement.dataset.theme = dark && !broadcast.enabled ? 'dark' : '
 app.innerHTML = `<div class="loading"><img src="${base}mascot/brand.png" alt="" width="64" height="64"><h1>진원 지도</h1><p>과거의 지진 기록을 불러오고 있어요.</p></div>`;
 let catalog:Catalog, scene:QuakeScene|undefined, filters:Filters;
 let selected:Quake|null = null, visible:Quake[] = [], scale = 4;
-let rotating = false, playing = false, depthColors = false;
+let rotating = false, playing = false, depthColors = true;
 let tourHero:Quake|null|undefined, motionPaused=false, motionLabel='전체 분포';
 let cursor = 1, totalDays = 1, listSort = 'latest', listQuery = '', listLimit = 40;
 let playTimer:number|undefined, toastTimer:number|undefined;
@@ -35,7 +35,7 @@ async function boot() {
   const region = sharedFilters.region ?? 'korea';
   filters = {region,from:'2016-01-01',to:catalog.snapshotEnd,minMag:2,maxDepth:REGIONS[region].depth,unknown:true,kma:true,usgs:true,...sharedFilters};
   scale = sharedScale ?? REGIONS[region].scale;
-  depthColors = new URLSearchParams(location.search).get('colors')==='1';
+  depthColors = new URLSearchParams(location.search).get('colors')!=='0';
   if (filters.from > filters.to) filters.from = filters.to;
   app.innerHTML = layout(catalog);
   $<HTMLInputElement>('#broadcast-title').value=broadcast.title;
@@ -198,7 +198,7 @@ function download(content:Blob|string,name:string) {
 function setView(view:'oblique'|'top'|'side') { scene?.setView(view);document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view))); }
 function reset() {
   filters={region:'korea',from:'2016-01-01',to:catalog.snapshotEnd,minMag:2,maxDepth:100,unknown:true,kma:true,usgs:true};
-  scale=4;selected=null;depthColors=false;rotating=false;scene?.setRotate(false);$('#rotate').setAttribute('aria-pressed','false');$('#date-error').textContent='';
+  scale=4;selected=null;depthColors=true;rotating=false;scene?.setRotate(false);$('#rotate').setAttribute('aria-pressed','false');$('#date-error').textContent='';
   scene?.setRegion('korea');applyTheme();syncControls();resetTimeline();refresh();setView('oblique');
 }
 function changeRegion(region:Region) {
@@ -232,7 +232,7 @@ function bind() {
   $('#screenshot').onclick=()=>{if(scene){download(scene.screenshot(),`korea-quake-${effectiveTo()}.png`);closeSheet('more-dialog');}else toast('3D 지도를 시작하지 못했습니다.');};
   $('#export').onclick=()=>{download(new Blob([csv(visible)],{type:'text/csv;charset=utf-8'}),`korea-quakes-${filters.from}-${effectiveTo()}.csv`);closeSheet('more-dialog');toast(`${fmt(visible.length)}건을 CSV로 저장했습니다.`);};
   $('#share').onclick=async()=>{
-    const url=new URL(location.href);url.search='';for(const [k,v] of Object.entries(filters))url.searchParams.set(k,typeof v==='boolean'?(v?'1':'0'):String(v));url.searchParams.set('to',effectiveTo());url.searchParams.set('scale',String(scale));if(depthColors)url.searchParams.set('colors','1');if(selected)url.searchParams.set('event',selected.id);
+    const url=new URL(location.href);url.search='';for(const [k,v] of Object.entries(filters))url.searchParams.set(k,typeof v==='boolean'?(v?'1':'0'):String(v));url.searchParams.set('to',effectiveTo());url.searchParams.set('scale',String(scale));url.searchParams.set('colors',depthColors?'1':'0');if(selected)url.searchParams.set('event',selected.id);
     try{await navigator.clipboard.writeText(url.toString());history.replaceState(null,'',url);toast('현재 조건과 선택한 지진의 링크를 복사했습니다.');}catch{history.replaceState(null,'',url);toast('주소창의 링크를 복사해 공유해주세요.');}closeSheet('more-dialog');
   };
   $('#event-list').onclick=e=>{const b=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-event]');const q=b?visible.find(q=>q.id===b.dataset.event):null;if(q)selectEvent(q);};

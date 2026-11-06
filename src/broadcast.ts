@@ -18,7 +18,7 @@ export function broadcastURL(base:string,filters:Filters,scale:number,colors:boo
   const u=new URL(base);u.search='';u.hash='';
   for(const [k,v] of Object.entries(filters))u.searchParams.set(k,typeof v==='boolean'?(v?'1':'0'):String(v));
   u.searchParams.set('scale',String(scale));
-  if(colors)u.searchParams.set('colors','1');
+  u.searchParams.set('colors',colors?'1':'0');
   if(eventId)u.searchParams.set('event',eventId);
   u.searchParams.set('broadcast','1');u.searchParams.set('view',options.view);
   if(options.title)u.searchParams.set('title',options.title);

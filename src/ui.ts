@@ -28,7 +28,7 @@ export function layout(catalog:Catalog) {
       <div id="empty-state" hidden><h2>표시할 지진이 없어요</h2><p>기간이나 표시 조건을 조금 넓혀보세요.</p><button id="empty-reset">조건 초기화</button></div>
     </section>
     <aside class="broadcast-summary" id="broadcast-summary" aria-label="방송용 핵심 정보"></aside>
-    <footer class="broadcast-footer"><div><p id="broadcast-period"></p><div class="broadcast-footnotes"><span id="broadcast-scale"></span><span id="broadcast-motion-status"></span><span>점 크기: 규모 · 빈 원: 깊이 미상</span></div><div id="broadcast-legend" hidden></div></div><div class="broadcast-source"><p>자료: 기상청 · USGS</p><span id="broadcast-snapshot"></span></div><button class="broadcast-mobile-exit" id="broadcast-exit">일반 화면으로</button></footer>
+    <footer class="broadcast-footer"><div><p id="broadcast-period"></p><div class="broadcast-footnotes"><span id="broadcast-scale"></span><span id="broadcast-motion-status"></span><span>점 크기: 규모 · 빈 원: 깊이 미상</span></div><div id="broadcast-legend" hidden></div></div><div class="broadcast-source"><p>자료: 기상청 · USGS</p><span id="broadcast-snapshot"></span><small class="broadcast-copyright">© 단국대학교 건축공학과</small></div><button class="broadcast-mobile-exit" id="broadcast-exit">일반 화면으로</button></footer>
     <div class="map-toolbar">
       <div class="segmented view-tools" role="group" aria-label="카메라 시점"><button data-view="oblique" aria-pressed="true">3D</button><button data-view="top" aria-pressed="false">위에서</button><button data-view="side" aria-pressed="false">옆에서</button></div>
       <div class="view-actions"><span id="scale-badge" class="quiet-label"></span><button id="rotate" class="tool icon-only" title="자동 회전" aria-label="자동 회전" aria-pressed="false">${icon('orbit')}</button><button id="view-reset" class="tool icon-only" title="시점 초기화" aria-label="시점 초기화">${icon('reset')}</button></div>
@@ -41,7 +41,7 @@ export function layout(catalog:Catalog) {
       <div class="timeline-top"><span>시간 탐색</span><div><strong id="timeline-date"></strong><span>까지</span><button id="timeline-end" class="quiet-button" title="선택 기간 끝으로">전체 보기</button></div></div>
       <div class="timeline-track"><button id="play" class="tool play-button" aria-label="시간 재생" title="30일 간격으로 재생" aria-pressed="false">${icon('play')}</button><div class="timeline-chart"><div id="histogram" aria-hidden="true"></div><input type="range" id="timeline-slider" min="0" max="100" value="100" aria-label="누적 표시 종료 날짜"><div id="year-labels" class="year-labels"></div></div></div>
     </section>
-    <footer class="app-footer"><span id="snapshot"></span><span class="footer-method">과거 관측 자료</span><button id="source-open">데이터 안내</button><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer" class="map-credit">지도 · Natural Earth</a></footer>
+    <footer class="app-footer"><span class="app-copyright">© 단국대학교 건축공학과</span><span id="snapshot"></span><span class="footer-method">과거 관측 자료</span><button id="source-open">데이터 안내</button><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer" class="map-credit">지도 · Natural Earth</a></footer>
   </main>
   ${dialog('period-dialog','발생 기간',`
     <p class="sheet-intro">어느 시기의 지진을 살펴볼까요?</p>
@@ -56,7 +56,7 @@ export function layout(catalog:Catalog) {
     <div class="setting-row"><label for="scale">깊이 배율</label><select id="scale"><option value="1">1× · 실제 비율</option><option value="2">2×</option><option value="4">4×</option><option value="6">6×</option><option value="10">10×</option></select></div>
     <p class="hint">배율은 수직축에만 적용됩니다. 수평·수직 단위는 km입니다.</p>
     <label class="check-row"><span>깊이 미상 지진<small>지표의 빈 원으로 따로 표시</small></span><input type="checkbox" id="unknown"></label>
-    <label class="check-row"><span>깊이를 색상으로 구분<small>분석할 때만 깊이 범례를 표시</small></span><input type="checkbox" id="depth-colors"></label>
+    <label class="check-row"><span>깊이를 색상으로 구분<small>진원 깊이별 색상과 범례 표시 · 기본 켜짐</small></span><input type="checkbox" id="depth-colors"></label>
     <div id="depth-legend" class="depth-legend" hidden></div>
     <section class="sheet-section"><h3>포함할 자료</h3><label class="check-row"><span>기상청<small>국내 공개 목록 · 미소지진 포함</small></span><input type="checkbox" id="kma"></label><label class="check-row"><span>USGS<small>주변 지역 · M4.5 이상</small></span><input type="checkbox" id="usgs"></label></section>
     <button id="reset" class="quiet-button reset-filters">표시 조건과 기간 초기화</button>`)}

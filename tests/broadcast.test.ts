@@ -30,5 +30,5 @@ test('OBS URL round-trips the exact filters, selection, vertical scale, and dept
   assert.deepEqual({region:'korea',...readState(u.search,'2026-11-06')},{...filters,event:'kma-2016-999',scale:4});
   const regional=new URL(broadcastURL(u.href,{...filters,region:'eastasia'},1,false,undefined,options));
   assert.equal(readState(regional.search,'2026-11-06').region,'eastasia');
-  assert.equal(regional.searchParams.has('event'),false);assert.equal(regional.searchParams.has('colors'),false);
+  assert.equal(regional.searchParams.has('event'),false);assert.equal(regional.searchParams.get('colors'),'0');
 });
