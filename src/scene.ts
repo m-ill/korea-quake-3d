@@ -13,14 +13,31 @@ export class QuakeScene {
   private ray=new THREE.Raycaster(); private pointer=new THREE.Vector2();private selected:Quake|null=null;
   private down=[0,0]; private resizeObserver:ResizeObserver;private frame=0;private last=performance.now();
   private needsRender=true;private hidden=false;private onVisibility=()=>{this.hidden=document.hidden;this.last=performance.now();};
+  private dark=false;private depthColors=false;private hasSize=false;
+  private fitDistance(direction:THREE.Vector3,aspect:number,target:THREE.Vector3){
+    const b=REGIONS[this.region].bounds;
+    const maxDepth=Math.max(this.region==='korea'?100:700,...this.events.map(e=>e.depth??0));
+    const right=new THREE.Vector3().crossVectors(this.camera.up,direction).normalize();
+    const up=new THREE.Vector3().crossVectors(direction,right).normalize();
+    const tangent=Math.tan(THREE.MathUtils.degToRad(this.camera.fov/2));let distance=40;
+    // Fit all eight corners, including the lower depth frame, with space for labels.
+    for(const lon of [b[0]-.2,b[2]+.2])for(const lat of [b[1]-.2,b[3]+.2])for(const depth of [0,maxDepth]){
+      const p=this.point(lon,lat,depth).sub(target),near=p.dot(direction);
+      distance=Math.max(distance,near+Math.abs(p.dot(up))/(tangent*.9),near+Math.abs(p.dot(right))/(tangent*Math.max(.3,aspect)*.9));
+    }
+    return distance;
+  }
+  private get palette(){return this.dark
+    ? {land:0x8592a2,coast:0xa7b3c2,border:0x778597,grid:0x596574,edge:0x718091,label:'#7e8998',city:'#b0b9c6',point:'#bbc4d1',ring:0x83909f,selection:0x78aaff,background:0x151619}
+    : {land:0x9aa2aa,coast:0x606b77,border:0x939ba5,grid:0xc4c9d0,edge:0xa9b0ba,label:'#89919b',city:'#606973',point:'#687786',ring:0x9ba3ad,selection:0x246ee9,background:0xfcfcfd};}
   constructor(private host:HTMLElement,private map:MapData,private onSelect:(e:Quake)=>void) {
     this.renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio,2));this.renderer.setClearColor(0x0a111b,0);
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio,2));this.renderer.setClearColor(this.palette.background,0);
     this.host.append(this.renderer.domElement);this.renderer.domElement.setAttribute('aria-label','드래그로 회전하는 3D 진원 지도');
     this.renderer.domElement.tabIndex=0;
-    this.camera=new THREE.PerspectiveCamera(42,1,1,16000);
-    this.controls=new OrbitControls(this.camera,this.renderer.domElement);this.controls.enableDamping=true;this.controls.dampingFactor=.075;
-    this.controls.autoRotateSpeed=.42;this.controls.minDistance=40;this.controls.maxDistance=8000;this.controls.maxPolarAngle=Math.PI*.94;
+    this.camera=new THREE.PerspectiveCamera(42,1,1,60000);
+    this.controls=new OrbitControls(this.camera,this.renderer.domElement);this.controls.enableDamping=!matchMedia('(prefers-reduced-motion: reduce)').matches;this.controls.dampingFactor=.075;
+    this.controls.autoRotateSpeed=.42;this.controls.minDistance=40;this.controls.maxDistance=40000;this.controls.maxPolarAngle=Math.PI*.94;
     this.controls.addEventListener('change',()=>{this.needsRender=true;});
     this.scene.add(this.mapGroup,this.pointsGroup,this.focusGroup);
     this.renderer.domElement.addEventListener('pointerdown',e=>{this.down=[e.clientX,e.clientY];});
@@ -38,9 +55,14 @@ export class QuakeScene {
     });
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(host);
     document.addEventListener('visibilitychange',this.onVisibility);
-    this.setRegion('korea');this.animate();
+    this.setRegion('korea');this.resize();this.animate();
   }
-  private resize(){const {width,height}=this.host.getBoundingClientRect();if(!width||!height)return;this.renderer.setSize(width,height);this.camera.aspect=width/height;this.camera.updateProjectionMatrix();this.needsRender=true;}
+  private resize(){
+    const {width,height}=this.host.getBoundingClientRect();if(!width||!height)return;
+    const aspect=width/height;
+    if(this.hasSize){const offset=this.camera.position.clone().sub(this.controls.target),direction=offset.clone().normalize();const ratio=this.fitDistance(direction,aspect,this.controls.target)/this.fitDistance(direction,this.camera.aspect,this.controls.target);this.camera.position.copy(this.controls.target).add(offset.multiplyScalar(ratio));}
+    this.hasSize=true;this.renderer.setSize(width,height);this.camera.aspect=aspect;this.camera.updateProjectionMatrix();this.needsRender=true;
+  }
   private clear(group:THREE.Group){
     group.traverse(o=>{if(o instanceof THREE.InstancedMesh)o.dispose();if(o instanceof THREE.Mesh||o instanceof THREE.Line||o instanceof THREE.Points){o.geometry.dispose();const m=Array.isArray(o.material)?o.material:[o.material];m.forEach(x=>x.dispose());}if(o instanceof THREE.Sprite){o.material.map?.dispose();o.material.dispose();}});group.clear();
   }
@@ -56,7 +78,7 @@ export class QuakeScene {
       for(const c of input){const inside=direction*(c[axis]-edge)>=0;if(prev!==inside){const t=(edge-a[axis])/(c[axis]-a[axis]);p.push([a[0]+t*(c[0]-a[0]),a[1]+t*(c[1]-a[1])]);}if(inside)p.push(c);a=c;prev=inside;}
     }return p;
   }
-  private label(text:string,position:THREE.Vector3,color='#71849a',size=15){
+  private label(text:string,position:THREE.Vector3,color=this.palette.label,size=15){
     const c=document.createElement('canvas');c.width=512;c.height=64;const ctx=c.getContext('2d')!;
     ctx.font=`500 ${size*2}px "Segoe UI", "Malgun Gothic", sans-serif`;ctx.fillStyle=color;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,256,32);
     const texture=new THREE.CanvasTexture(c);texture.colorSpace=THREE.SRGBColorSpace;
@@ -74,42 +96,42 @@ export class QuakeScene {
       const convert=(r:number[][])=>r.map(c=>{const p=this.point(c[0],c[1]);return new THREE.Vector2(p.x,p.z);});
       const shape=new THREE.Shape(convert(rings[0]));rings.slice(1).forEach(r=>shape.holes.push(new THREE.Path(convert(r))));
       const g=new THREE.ShapeGeometry(shape);g.rotateX(Math.PI/2); // xy -> xz, with local z sign preserved
-      const mesh=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0x426579,side:THREE.DoubleSide,transparent:true,opacity:.16,depthWrite:false}));mesh.renderOrder=0;this.mapGroup.add(mesh);
-      rings.forEach(r=>this.line([...r,r[0]],0x6e9baf,.68));
+      const mesh=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:this.palette.land,side:THREE.DoubleSide,transparent:true,opacity:this.dark?.1:.07,depthWrite:false}));mesh.renderOrder=0;this.mapGroup.add(mesh);
+      rings.forEach(r=>this.line([...r,r[0]],this.palette.coast,.5));
     }
-    for(const border of this.map.borders){let run:number[][]=[];for(const c of border){if(c[0]>=b[0]&&c[0]<=b[2]&&c[1]>=b[1]&&c[1]<=b[3])run.push(c);else{this.line(run,0x7090a2,.35);run=[];}}this.line(run,0x7090a2,.35);}
+    for(const border of this.map.borders){let run:number[][]=[];for(const c of border){if(c[0]>=b[0]&&c[0]<=b[2]&&c[1]>=b[1]&&c[1]<=b[3])run.push(c);else{this.line(run,this.palette.border,.3);run=[];}}this.line(run,this.palette.border,.3);}
     for(let lon=Math.ceil(b[0]);lon<=b[2];lon+=(this.region==='korea'?2:5)){
-      this.line([[lon,b[1]],[lon,b[3]]],0x334353,.4);this.label(`${lon}°E`,this.point(lon,b[1]-.22));
+      this.line([[lon,b[1]],[lon,b[3]]],this.palette.grid,.28);this.label(`${lon}°E`,this.point(lon,b[1]-.22));
     }
     for(let lat=Math.ceil(b[1]);lat<=b[3];lat+=(this.region==='korea'?2:4)){
-      this.line([[b[0],lat],[b[2],lat]],0x334353,.4);this.label(`${lat}°N`,this.point(b[0]-.3,lat));
+      this.line([[b[0],lat],[b[2],lat]],this.palette.grid,.28);this.label(`${lat}°N`,this.point(b[0]-.3,lat));
     }
-    this.line([[b[0],b[1]],[b[2],b[1]],[b[2],b[3]],[b[0],b[3]],[b[0],b[1]]],0x6c8598,.5);
+    this.line([[b[0],b[1]],[b[2],b[1]],[b[2],b[3]],[b[0],b[3]],[b[0],b[1]]],this.palette.edge,.4);
     const max=this.region==='korea'?100:700;const step=this.region==='korea'?20:100;
     for(let d=step;d<=max;d+=step){
       const corners=[[b[0],b[1]],[b[2],b[1]],[b[2],b[3]],[b[0],b[3]],[b[0],b[1]]].map(c=>this.point(c[0],c[1],d));
-      const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(corners),new THREE.LineBasicMaterial({color:0x304255,transparent:true,opacity:.32,depthWrite:false}));this.mapGroup.add(line);
-      this.label(`${d} km`,this.point(b[2]+.25,b[1],d),'#688095',12);
+      const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(corners),new THREE.LineBasicMaterial({color:this.palette.grid,transparent:true,opacity:.24,depthWrite:false}));this.mapGroup.add(line);
+      this.label(`${d} km`,this.point(b[2]+.25,b[1],d),this.palette.label,12);
     }
     for(const [lon,lat] of [[b[0],b[1]],[b[2],b[1]],[b[2],b[3]],[b[0],b[3]]]){
-      this.mapGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([this.point(lon,lat),this.point(lon,lat,max)]),new THREE.LineBasicMaterial({color:0x40546a,transparent:true,opacity:.5})));
+      this.mapGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([this.point(lon,lat),this.point(lon,lat,max)]),new THREE.LineBasicMaterial({color:this.palette.edge,transparent:true,opacity:.35})));
     }
     const cities:[string,number,number][]=[['서울',126.98,37.57],['부산',129.07,35.18],['제주',126.53,33.5],['평양',125.75,39.03],['울릉도',130.9,37.48],['독도',131.87,37.24],['도쿄',139.69,35.68],['후쿠오카',130.4,33.59],['베이징',116.4,39.9],['삿포로',141.35,43.06]];
     for(const [name,lon,lat] of cities){if(lon<b[0]||lon>b[2]||lat<b[1]||lat>b[3])continue;
-      this.label(name,this.point(lon,lat+.13),'#9fb5c8',12);
-      const dot=new THREE.Mesh(new THREE.CircleGeometry(this.region==='korea'?2:5,12),new THREE.MeshBasicMaterial({color:0x94acba,side:THREE.DoubleSide,transparent:true,opacity:.9,depthWrite:false}));dot.rotation.x=-Math.PI/2;dot.position.copy(this.point(lon,lat));dot.position.y=.5;this.mapGroup.add(dot);
+      this.label(name,this.point(lon,lat+.13),this.palette.city,12);
+      const dot=new THREE.Mesh(new THREE.CircleGeometry(this.region==='korea'?2:5,12),new THREE.MeshBasicMaterial({color:this.palette.edge,side:THREE.DoubleSide,transparent:true,opacity:.9,depthWrite:false}));dot.rotation.x=-Math.PI/2;dot.position.copy(this.point(lon,lat));dot.position.y=.5;this.mapGroup.add(dot);
     }
-    this.label('N',this.point(this.center[0],b[3]+.38),'#b0c3d1',18);this.needsRender=true;
+    this.label('N',this.point(this.center[0],b[3]+.38),this.palette.city,18);this.needsRender=true;
   }
   updateEvents(events:Quake[],scale:number){
     const changed=this.scale!==scale;this.scale=scale;if(changed)this.buildMap();this.events=events;
     this.clear(this.pointsGroup);this.known=events.filter(e=>e.depth!==null);this.unknown=events.filter(e=>e.depth===null);
     const geo=new THREE.SphereGeometry(1,10,7), material=new THREE.MeshBasicMaterial({color:0xffffff});
     this.mesh=new THREE.InstancedMesh(geo,material,this.known.length);
-    this.rings=new THREE.InstancedMesh(new THREE.RingGeometry(.65,1,16),new THREE.MeshBasicMaterial({color:0x8495ad,side:THREE.DoubleSide,transparent:true,opacity:.55,depthWrite:false}),this.unknown.length);
+    this.rings=new THREE.InstancedMesh(new THREE.RingGeometry(.65,1,16),new THREE.MeshBasicMaterial({color:this.palette.ring,side:THREE.DoubleSide,transparent:true,opacity:.6,depthWrite:false}),this.unknown.length);
     const dummy=new THREE.Object3D(),color=new THREE.Color();
     const base=this.region==='korea'?1:2.2;
-    this.known.forEach((e,i)=>{dummy.position.copy(this.point(e.lon,e.lat,e.depth!));dummy.rotation.set(0,0,0);dummy.scale.setScalar(base*(2+Math.max(e.mag,0)**1.6*.48));dummy.updateMatrix();this.mesh!.setMatrixAt(i,dummy.matrix);this.mesh!.setColorAt(i,color.set(depthColor(e.depth)));});
+    this.known.forEach((e,i)=>{dummy.position.copy(this.point(e.lon,e.lat,e.depth!));dummy.rotation.set(0,0,0);dummy.scale.setScalar(base*(2+Math.max(e.mag,0)**1.6*.48));dummy.updateMatrix();this.mesh!.setMatrixAt(i,dummy.matrix);this.mesh!.setColorAt(i,color.set(this.depthColors?depthColor(e.depth):this.palette.point));});
     this.unknown.forEach((e,i)=>{dummy.position.copy(this.point(e.lon,e.lat));dummy.position.y=1;dummy.rotation.set(-Math.PI/2,0,0);dummy.scale.setScalar(base*(2+Math.max(e.mag,0)**1.6*.48));dummy.updateMatrix();this.rings!.setMatrixAt(i,dummy.matrix);});
     this.mesh.computeBoundingSphere();this.rings.computeBoundingSphere();this.pointsGroup.add(this.mesh,this.rings);this.select(this.selected);this.needsRender=true;
   }
@@ -122,18 +144,20 @@ export class QuakeScene {
   select(e:Quake|null){
     this.selected=e;this.clear(this.focusGroup);if(!e||!this.events.some(q=>q.id===e.id)){this.needsRender=true;return;}
     const p=this.point(e.lon,e.lat,e.depth??0);const radius=this.region==='korea'?13:26;
-    const ring=new THREE.Mesh(new THREE.TorusGeometry(radius,.8,6,48),new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false,transparent:true,opacity:.9}));ring.position.copy(p);this.focusGroup.add(ring);
-    const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([p,this.point(e.lon,e.lat)]),new THREE.LineDashedMaterial({color:0xb6dfdc,dashSize:5,gapSize:4,transparent:true,opacity:.7,depthTest:false}));line.computeLineDistances();this.focusGroup.add(line);this.needsRender=true;
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(radius,1.2,6,48),new THREE.MeshBasicMaterial({color:this.palette.selection,depthTest:false,transparent:true,opacity:.95}));ring.position.copy(p);this.focusGroup.add(ring);
+    const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([p,this.point(e.lon,e.lat)]),new THREE.LineDashedMaterial({color:this.palette.selection,dashSize:5,gapSize:4,transparent:true,opacity:.65,depthTest:false}));line.computeLineDistances();this.focusGroup.add(line);
+    const highlight=new THREE.Mesh(new THREE.SphereGeometry(radius*.32,12,8),new THREE.MeshBasicMaterial({color:this.palette.selection,depthTest:false}));highlight.position.copy(p);this.focusGroup.add(highlight);this.needsRender=true;
   }
   focus(e:Quake){this.controls.target.copy(this.point(e.lon,e.lat,e.depth??0));const d=this.region==='korea'?400:800;this.camera.position.copy(this.controls.target).add(new THREE.Vector3(d*.5,d*.6,d));this.controls.update();}
   setView(view:'oblique'|'top'|'side'){
     const aspect=Math.max(.3,this.host.clientWidth/Math.max(1,this.host.clientHeight));
-    const k=(this.region==='korea'?1:2.15)*Math.max(1,1.2/aspect);this.controls.target.set(0,-(this.region==='korea'?90:180),0);
+    const depth=this.region==='korea'?100:700;this.controls.target.set(0,-depth*this.scale*.4,0);
     const offsets={oblique:new THREE.Vector3(550,1050,1250),top:new THREE.Vector3(0,1900,1),side:new THREE.Vector3(0,30,1700)};
-    this.camera.position.copy(this.controls.target).add(offsets[view].multiplyScalar(k));this.controls.update();this.needsRender=true;
+    const direction=offsets[view].normalize();this.camera.position.copy(this.controls.target).addScaledVector(direction,this.fitDistance(direction,aspect,this.controls.target));this.controls.update();this.needsRender=true;
   }
   setRotate(value:boolean){this.controls.autoRotate=value;this.needsRender=true;}
-  screenshot(){this.renderer.render(this.scene,this.camera);return this.renderer.domElement.toDataURL('image/png');}
+  setAppearance(dark:boolean,depthColors:boolean){this.dark=dark;this.depthColors=depthColors;this.renderer.setClearColor(this.palette.background,0);this.controls.enableDamping=!matchMedia('(prefers-reduced-motion: reduce)').matches;this.buildMap();this.updateEvents(this.events,this.scale);}
+  screenshot(){this.renderer.setClearAlpha(1);this.renderer.render(this.scene,this.camera);const image=this.renderer.domElement.toDataURL('image/png');this.renderer.setClearAlpha(0);this.needsRender=true;return image;}
   private animate=()=>{
     this.frame=requestAnimationFrame(this.animate);const now=performance.now(),dt=Math.min((now-this.last)/1000,.1);this.last=now;if(this.hidden)return;
     this.controls.update(dt);

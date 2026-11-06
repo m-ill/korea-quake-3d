@@ -22,3 +22,6 @@ SOFTWARE.
 
 Third-party data in public/data/ is not relicensed under the MIT License.
 See README.md and the catalog/map metadata for original sources and terms.
+
+The user-provided bear brand and derived mascot assets in public/mascot/
+are not relicensed under the MIT License. See public/mascot/README.md.

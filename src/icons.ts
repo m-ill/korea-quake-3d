@@ -1,0 +1,19 @@
+const paths: Record<string,string> = {
+  orbit:'M21 12a9 9 0 1 1-9-9M3 3l18 18M16 3h5v5',
+  sliders:'M4 21v-7m0-5V3m8 18v-9m0-5V3m8 18v-5m0-5V3M1 9h6m2-2h6m2 9h6',
+  calendar:'M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z',
+  list:'M9 6h12M9 12h12M9 18h12M3 6h.01M3 12h.01M3 18h.01',
+  download:'M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5',
+  share:'M12 16V3m-5 5 5-5 5 5M4 13v8h16v-8',
+  info:'M12 11v6m0-10h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
+  close:'m6 6 12 12M6 18 18 6',chevron:'m9 5 7 7-7 7',down:'m6 9 6 6 6-6',
+  play:'m8 4 12 8-12 8V4Z',pause:'M8 4v16M16 4v16',
+  reset:'M3 11a9 9 0 1 1 2 7M3 4v7h7',
+  focus:'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M8 12h8m-4-4v8',
+  camera:'M14 4h-4L8 7H3v13h18V7h-5l-2-3ZM16 13a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+  search:'m20 20-5-5M17 10A7 7 0 1 1 3 10a7 7 0 0 1 14 0',
+  moon:'M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z',
+  sun:'M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+  more:'M5 12h.01M12 12h.01M19 12h.01',check:'m5 12 4 4L19 6',
+};
+export const icon=(name:string)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]??paths.info}"/></svg>`;
