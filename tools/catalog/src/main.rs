@@ -25,11 +25,12 @@ struct Alternate { id: String, source: String, mag: f64, mag_type: String, depth
 fn parse_number(s: &str) -> Option<f64> {
     s.split_whitespace().next()?.parse::<f64>().ok().filter(|v| v.is_finite())
 }
-fn parse_kma(body: &str) -> Result<Vec<Event>> {
+fn parse_kma(body: &str) -> Result<(Vec<Event>, Vec<Value>)> {
     let html = Html::parse_document(body);
     let row = Selector::parse("#excel_body tr").unwrap();
     let cell = Selector::parse("td").unwrap();
     let mut out = Vec::new();
+    let mut unlocated = Vec::new();
     for tr in html.select(&row) {
         let c: Vec<String> = tr.select(&cell).map(|td| td.text().collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ")).collect();
         if c.len() < 8 { continue; }
@@ -40,15 +41,17 @@ fn parse_kma(body: &str) -> Result<Vec<Event>> {
         let mag = parse_number(&c[2]).context("Missing KMA magnitude")?;
         let depth = parse_number(&c[3]);
         // KMA's current export has intensity; older exports may have 7 data columns.
-        let lat = parse_number(&c[5]).context("Missing KMA latitude")?;
-        let lon = parse_number(&c[6]).context("Missing KMA longitude")?;
+        let (Some(lat), Some(lon)) = (parse_number(&c[5]), parse_number(&c[6])) else {
+            unlocated.push(json!({"time":time,"source":"KMA","rawColumns":c,"reason":"원본 위경도 결측으로 지도 배치 불가"}));
+            continue;
+        };
         let intensity = if c[4].is_empty() || c[4] == "-" { None } else { Some(c[4].clone()) };
         let year = &c[1][..4];
         out.push(Event { id: format!("kma-{year}-{}", c[0]), time, lat, lon, depth, mag, mag_type: "M".into(), intensity,
             place: c[7].clone(), source: "KMA".into(), url: format!("{KMA}?startTm={year}-01-01&endTm={year}-12-31"), alternate: vec![] });
     }
-    ensure!(!out.is_empty(), "KMA export had no parsable records; retaining previous catalog");
-    Ok(out)
+    ensure!(!out.is_empty() || !unlocated.is_empty(), "KMA export had no parsable records; retaining previous catalog");
+    Ok((out, unlocated))
 }
 fn parse_usgs(body: &str) -> Result<Vec<Event>> {
     let doc: Value = serde_json::from_str(body)?;
@@ -125,16 +128,18 @@ fn main() -> Result<()> {
     let client = Client::builder().user_agent("KoreaQuake3D/1.0 (historical research visualization)").timeout(Duration::from_secs(90)).build()?;
     use chrono::Datelike;
     let mut kma = Vec::new();
+    let mut unlocated = Vec::new();
     for year in 1978..=end.year() {
         let year_end = NaiveDate::from_ymd_opt(year,12,31).unwrap().min(end);
         let kma_url = format!("{KMA}?startTm={year}-01-01&endTm={year_end}&startSize=0&dpType=a&xls=1");
         let body = fetch(&client, &kma_url, &cache.join(format!("kma-year-{year}-{year_end}.html")), refresh)?;
-        let mut records = parse_kma(&body)?;
-        ensure!(records.len() < 4000, "KMA export reached 4000-row cap in {year}; split into shorter periods");
+        let (mut records, mut excluded) = parse_kma(&body)?;
+        ensure!(records.len() + excluded.len() < 4000, "KMA export reached 4000-row cap in {year}; split into shorter periods");
         ensure!(records.iter().all(|e| { let t=DateTime::parse_from_rfc3339(&e.time).unwrap() + chrono::Duration::hours(9); t.year() == year }), "KMA ignored year filter: {year}");
         println!("KMA {year}: {} events", records.len()); kma.append(&mut records);
+        unlocated.append(&mut excluded);
     }
-    let kma_count = kma.len();
+    let kma_count = kma.len() + unlocated.len();
     println!("KMA: {kma_count} events");
     let mut usgs = Vec::new();
     let stop = end.checked_add_days(Days::new(1)).context("End date overflow")?;
@@ -158,7 +163,8 @@ fn main() -> Result<()> {
         "sources": [
             {"id":"KMA", "name":"기상청", "url":KMA, "start":"1978-01-01", "end":end.to_string(), "rawCount":kma_count, "coverage":"국내 공개 목록 · 미소지진 포함. 연도별 관측·공개 기준이 다릅니다."},
             {"id":"USGS", "name":"USGS ComCat", "url":"https://earthquake.usgs.gov/fdsnws/event/1/", "start":"2000-01-01", "end":end.to_string(), "rawCount":usgs_count, "coverage":"북위 29–47°, 동경 118–148° · M4.5 이상. 국내 소규모 지진을 대표하지 않습니다."}],
-        "stats":{"total":events.len(), "unknownDepth":unknown, "linkedDuplicates":linked},
+        "stats":{"total":events.len(), "unknownDepth":unknown, "linkedDuplicates":linked,"unlocated":unlocated.len()},
+        "unlocated":unlocated,
         "matchingRule":"KMA 우선. 시각 차이 ≤30초·거리 ≤30km·규모 차이 ≤0.8의 유일 후보만 연결. 원본 추정치는 alternate에 보존하며 깊이를 대체하지 않음.",
         "events":events });
     fs::create_dir_all("public/data")?;
@@ -175,7 +181,7 @@ mod tests {
     fn event(id: &str, time: &str, lat: f64) -> Event { Event { id:id.into(), time:time.into(), lat, lon:129., depth:None, mag:5., mag_type:"M".into(), intensity:None, place:"test".into(), source:"KMA".into(), url:KMA.into(), alternate:vec![] } }
     #[test] fn kma_time_and_null_depth() {
         let h = "<table id='excel_body'><tr><td>1</td><td>2016/09/12 20:32:54</td><td>5.8</td><td>-</td><td>Ⅵ</td><td>35.77 N</td><td>129.18 E</td><td>경주</td></tr></table>";
-        let e = parse_kma(h).unwrap(); assert_eq!(e[0].time,"2016-09-12T11:32:54Z"); assert_eq!(e[0].depth,None); assert_eq!(e[0].lat,35.77);
+        let (e,_) = parse_kma(h).unwrap(); assert_eq!(e[0].time,"2016-09-12T11:32:54Z"); assert_eq!(e[0].depth,None); assert_eq!(e[0].lat,35.77);
     }
     #[test] fn conservative_merge_preserves_measurements() {
         let a = event("kma-1", "2020-01-01T00:00:00Z", 35.);
