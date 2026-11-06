@@ -9,7 +9,7 @@ export class QuakeScene {
   private scene=new THREE.Scene(); private mapGroup=new THREE.Group(); private pointsGroup=new THREE.Group();
   private focusGroup=new THREE.Group(); private labels:Label[]=[]; private known:Quake[]=[];private unknown:Quake[]=[];
   private mesh?:THREE.InstancedMesh; private rings?:THREE.InstancedMesh; private events:Quake[]=[];
-  private region:Region='korea';private scale=4; private center:[number,number]=[127.25,37.5];
+  private region:Region='korea';private scale=4; private center:[number,number]=[127.25,37.5];private eventDepth=0;
   private ray=new THREE.Raycaster(); private pointer=new THREE.Vector2();private selected:Quake|null=null;
   private down=[0,0]; private resizeObserver:ResizeObserver;private frame=0;private last=performance.now();
   private needsRender=true;private hidden=false;private onVisibility=()=>{this.hidden=document.hidden;this.last=performance.now();};
@@ -20,7 +20,7 @@ export class QuakeScene {
   private tour?:{stage:number;elapsed:number;interval:number;hero:Quake|null;from:THREE.Vector3;target:THREE.Vector3;change:(e:Quake|null,label:string)=>void};
   private fitDistance(direction:THREE.Vector3,aspect:number,target:THREE.Vector3){
     const b=REGIONS[this.region].bounds;
-    const maxDepth=Math.max(this.region==='korea'?100:700,...this.events.map(e=>e.depth??0));
+    const maxDepth=Math.max(this.region==='korea'?100:700,this.eventDepth);
     const right=new THREE.Vector3().crossVectors(this.camera.up,direction).normalize();
     const up=new THREE.Vector3().crossVectors(direction,right).normalize();
     const tangent=Math.tan(THREE.MathUtils.degToRad(this.camera.fov/2));let distance=40;
@@ -131,7 +131,7 @@ export class QuakeScene {
     this.label('N',this.point(this.center[0],b[3]+.38),this.palette.city,18);this.needsRender=true;
   }
   updateEvents(events:Quake[],scale:number){
-    const changed=this.scale!==scale;this.scale=scale;if(changed)this.buildMap();this.events=events;
+    const changed=this.scale!==scale;this.scale=scale;if(changed)this.buildMap();this.events=events;this.eventDepth=events.reduce((max,e)=>Math.max(max,e.depth??0),0);
     this.clear(this.pointsGroup);this.known=events.filter(e=>e.depth!==null);this.unknown=events.filter(e=>e.depth===null);
     const geo=new THREE.SphereGeometry(1,10,7), material=new THREE.MeshBasicMaterial({color:0xffffff});
     this.mesh=new THREE.InstancedMesh(geo,material,this.known.length);
