@@ -1,0 +1,33 @@
+name: Refresh historical catalog
+on:
+  workflow_dispatch:
+    inputs:
+      end:
+        description: '마지막 날짜 (YYYY-MM-DD, 비우면 오늘 KST)'
+        required: false
+        type: string
+permissions:
+  contents: read
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/catalog
+      - run: cargo test --locked --manifest-path tools/catalog/Cargo.toml
+      - name: Fetch and validate public catalogs
+        env:
+          END_DATE: ${{ inputs.end }}
+        run: |
+          args=()
+          if [ -n "$END_DATE" ]; then args+=(--end "$END_DATE"); fi
+          cargo run --release --locked --manifest-path tools/catalog/Cargo.toml -- "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: historical-catalog
+          path: public/data/catalog.json
+          retention-days: 7

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+target/
+**/target/
+.cache/
+.env
+.env.*
+!.env.example
+kma-page.html
+kma-export.xls
+*.log
+qa/
