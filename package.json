@@ -10,6 +10,15 @@
     "test": "tsx --test tests/*.test.ts",
     "data:update": "cargo run --release --manifest-path tools/catalog/Cargo.toml --"
   },
-  "dependencies": { "three": "^0.180.0", "lucide": "^0.468.0" },
-  "devDependencies": { "@types/three": "^0.180.0", "@types/node": "^22.0.0", "typescript": "~5.9.3", "vite": "^7.1.12", "tsx": "^4.20.6" }
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/three": "^0.180.0",
+    "terser": "^5.51.2",
+    "tsx": "^4.20.6",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.12"
+  }
 }

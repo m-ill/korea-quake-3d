@@ -1,0 +1,117 @@
+# Korea Quake 3D
+
+한반도와 동북아의 과거 지진을 **실제 위도·경도·깊이**로 배치해 탐색하는 3D 웹 지도입니다.
+
+**웹 서비스:** https://m-ill.github.io/korea-quake-3d/  
+**기술:** Rust 데이터 수집기 + TypeScript / Three.js + GitHub Pages
+
+## 사용하기
+
+- 지도를 드래그하면 회전합니다. 휠/핀치로 확대, 우클릭 드래그/두 손가락으로 이동합니다.
+- 지도에 키보드 포커스를 두면 방향키로 회전, `+`/`-`로 확대·축소합니다.
+- 한반도/동북아 영역과 위에서/옆에서/3D 시점을 전환할 수 있습니다.
+- 발생 기간(KST), 최소 규모, 최대 깊이, 자료 출처를 선택합니다.
+- 지진 점 또는 목록을 누르면 상세 정보와 원본 출처를 확인할 수 있습니다.
+- 아래 시간축은 선택한 시작일부터 커서 날짜까지 누적 표시합니다. 재생 버튼은 30일 간격으로 이동합니다.
+- 필터 결과 CSV, 현재 조건 공유 링크, 지도 PNG 저장을 지원합니다.
+- 모바일에서는 `조건` 버튼으로 필터를 펼치며 상세/목록은 지도 아래에 표시합니다.
+
+**설정할 API 키나 유료 지도 토큰이 없습니다.** 데이터는 빌드에 포함되며, 방문자의 브라우저에서 기상청/USGS API를 직접 호출하지 않습니다. 별도 백엔드 서버가 필요하지 않습니다.
+
+## 로컬 실행
+
+Node.js 22 이상:
+
+```sh
+npm ci
+npm run dev
+```
+
+배포와 동일한 빌드:
+
+```sh
+npm test
+node tools/validate-data.mjs
+npm run build
+npm run preview
+```
+
+현재 소스에는 과거 데이터 스냅샷과 지도 데이터를 포함합니다. 새로 데이터를 받지 않아도 웹앱 실행·빌드가 가능합니다. 폰트는 시스템 대체 폰트가 있으며 외부 웹폰트 연결 실패 시에도 이용할 수 있습니다.
+
+## 데이터 갱신 — Rust
+
+Rust stable 및 해당 OS 빌드 도구가 필요합니다. Windows MSVC에서는 Visual Studio Build Tools의 C++ 컴파일러/링커와 Windows SDK가 필요합니다. 웹앱만 실행할 때는 Rust가 필요하지 않습니다.
+
+저장소 최상위에서 실행:
+
+```sh
+npm run data:update -- --end 2026-11-06
+# 종료일을 생략하면 실행 시점의 KST 오늘
+npm run data:update
+# 캐시를 무시하고 동일 날짜를 다시 수집
+npm run data:update -- --end 2026-11-06 --refresh
+cargo test --locked --manifest-path tools/catalog/Cargo.toml
+node tools/validate-data.mjs
+```
+
+- 원본 응답은 `.cache/catalog/`에 보관합니다(커밋 제외).
+- 기상청 엑셀 다운로드의 건수 제한을 피하기 위해 연도별로 나눠 받습니다. 4,000건에 도달하거나 형식/필수값 검증이 실패하면 중단합니다.
+- 기관 간 연결 전 원본 규모·깊이를 보존합니다. 연결한 USGS 값은 `alternate`에 있으며 기상청의 깊이를 대신 채우지 않습니다.
+- 위경도가 없는 원본 사건은 `unlocated`에 남기고 지도에서 제외합니다.
+- 모든 수집·검증이 성공한 후에만 `public/data/catalog.json`을 교체합니다.
+- 지도 재생성: `node tools/fetch-map.mjs` (Natural Earth 다운로드 후 지역을 잘라 저장).
+
+로컬 Rust 빌드 환경이 없으면 GitHub의 **Actions → Refresh historical catalog → Run workflow**를 이용하세요. 완료한 실행에서 `historical-catalog` 아티팩트를 내려받아 `catalog.json`을 `public/data/catalog.json`에 넣고, 검증 후 커밋하면 Pages가 다시 배포됩니다. 이 워크플로는 저장소에 자동으로 쓰지 않습니다. 정기 자동 갱신은 설정하지 않았습니다.
+
+## GitHub Pages 배포
+
+이 저장소는 `.github/workflows/pages.yml`에서 테스트·데이터 검증·빌드 후 Pages로 배포합니다.
+
+다른 계정/이름으로 사용하는 경우:
+
+1. 저장소에 소스를 올립니다. 일반 GitHub Free 계정은 public 저장소를 사용합니다.
+2. **Settings → Pages → Build and deployment → Source → GitHub Actions**를 선택합니다.
+3. `main`에 푸시하거나 **Actions → Deploy GitHub Pages → Run workflow**를 실행합니다.
+4. 성공한 deploy 작업에 표시되는 웹 주소를 엽니다.
+
+`vite.config.ts`의 `base: './'`로 저장소 하위 경로에서도 자산·JSON을 읽습니다. `dist/`를 직접 커밋하지 않습니다. Pages 워크플로의 배포 권한은 `pages: write`, `id-token: write`이며 일반 저장소 내용은 읽기 전용입니다. 소스 링크/README의 웹 주소는 새 저장소에 맞게 수정하세요.
+
+## 데이터 출처와 해석
+
+| 데이터 | 범위 및 처리 | 원본 |
+|---|---|---|
+| 기상청 | 1978년 이후 국내 공개 목록, 미소지진 포함 옵션. 연도별 관측·공개 기준은 동일하지 않음. 시각을 KST에서 UTC로 정규화 | [국내지진조회](https://www.weather.go.kr/w/earthquake-volcano/search/korea.do) |
+| USGS ComCat | 2000년 이후 북위 29–47°, 동경 118–148°, M4.5 이상, eventtype=earthquake. 연도별 조회. KST 종료 날짜까지 포함 | [FDSN Event API](https://earthquake.usgs.gov/fdsnws/event/1/) |
+| 지도 | Natural Earth 1:50m land / admin boundaries, 영역 클리핑 | [Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/) · public domain |
+
+- **기본 기간은 2016년부터 스냅샷 날짜까지, 최소 규모는 M2.0입니다.** 규모를 0으로 낮추면 미소지진을 함께 표시합니다. `전체 기간`을 선택하면 1978년부터 볼 수 있습니다.
+- **깊이 미상**은 회색 빈 원으로 지표에 별도 표시합니다. 0 km로 추정한 값이 아닙니다. 확인된 깊이 0 km와 구분합니다.
+- 깊이는 원본 기관 기준이며, 음수 값이 있을 경우 기준면 위로 표시합니다.
+- 점 색상은 깊이, 크기는 규모의 시각적 척도이며 에너지·파열 크기의 실제 비율은 아닙니다.
+- 최대진도는 기상청 값만 사용합니다. 기상청 규모는 원본 목록에 규모 종류가 별도로 없으므로 `M`으로 기록합니다. USGS의 mb/Mw 등 원래 규모 종류는 보존합니다.
+- 같은 사건 연결은 **30초 이내·30 km 이내·규모 차이 0.8 이내의 유일한 기상청 후보**일 때만 적용합니다. 모호한 후보는 연결하지 않습니다. 자동 매칭은 해석상 한계가 있으므로 중요한 사건은 기관 원문을 확인하세요.
+- 수평 좌표는 영역 중심 위도를 기준으로 km 단위 지역 등거리 원통 근사 투영입니다. 지구 전체 모델이나 측량용 지도가 아니며 광역 오차가 있습니다.
+- 수직 배율은 지표 아래 깊이에만 적용합니다. 한반도 기본 4×, 동북아 기본 1×입니다. 선택한 배율은 화면에 표시됩니다.
+- 지도에 지질 단층·판 내부 면을 임의로 생성하지 않았습니다. 별도의 검증된 모델은 후속 확장입니다.
+- 관측망·기간·규모 수록 기준이 다른 기관을 함께 표시하므로 점 개수로 국가 간 위험도를 비교할 수 없습니다.
+
+이 서비스는 관측 기록 탐색용입니다. **실시간 경보나 지진 예측을 제공하지 않습니다.**
+
+## 프로젝트 구조
+
+```text
+src/model.ts              좌표·날짜·필터·CSV·공유 상태
+src/scene.ts              Three.js 지도·진원·선택·카메라
+src/main.ts               한국어 UI와 상태 연결
+src/style.css             반응형 화면
+public/data/catalog.json  정규화된 실제 지진 스냅샷
+public/data/map.json      Natural Earth 지역 지도
+tools/catalog/            Rust 수집기 및 테스트
+tools/validate-data.mjs    실제 데이터 무결성 검사
+tools/fetch-map.mjs        지도 준비 도구
+tests/                    날짜 경계·필터·좌표·내보내기 테스트
+PLAN.md                   개발 계획과 후속 범위
+.github/workflows/        Pages 배포 / 수동 자료 수집
+```
+
+프로그램 코드는 MIT 라이선스입니다. 지진 자료는 각 원본 기관의 공개 데이터 및 이용 정책을 따르며, MIT 라이선스가 제3자 데이터의 소유권을 부여하지 않습니다. 데이터 출처와 가공 여부를 화면과 이 문서에 표시합니다.
