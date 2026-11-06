@@ -3,14 +3,17 @@ import { csv, depthColor, filterEvents, kstDate, readState, REGIONS, validDate, 
 import { QuakeScene, type MapData } from './scene';
 import { icon } from './icons';
 import { esc, fmt, layout } from './ui';
+import { broadcastURL, readBroadcast, type CameraView } from './broadcast';
 
 const $ = <T extends HTMLElement = HTMLElement>(s:string) => document.querySelector<T>(s)!;
 const app = $('#app');
 const base = import.meta.env.BASE_URL;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const broadcast = readBroadcast(location.search);
+document.documentElement.classList.toggle('broadcast-mode',broadcast.enabled);
 let dark = false;
 try { dark = localStorage.getItem('quake-theme') === 'dark'; } catch { /* Private storage may be unavailable. */ }
-document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+document.documentElement.dataset.theme = dark && !broadcast.enabled ? 'dark' : 'light';
 app.innerHTML = `<div class="loading"><img src="${base}mascot/brand.png" alt="" width="64" height="64"><h1>진원 지도</h1><p>과거의 지진 기록을 불러오고 있어요.</p></div>`;
 let catalog:Catalog, scene:QuakeScene|undefined, filters:Filters;
 let selected:Quake|null = null, visible:Quake[] = [], scale = 4;
@@ -34,6 +37,9 @@ async function boot() {
   depthColors = new URLSearchParams(location.search).get('colors')==='1';
   if (filters.from > filters.to) filters.from = filters.to;
   app.innerHTML = layout(catalog);
+  $<HTMLInputElement>('#broadcast-title').value=broadcast.title;
+  $<HTMLSelectElement>('#broadcast-view').value=broadcast.view;
+  $<HTMLInputElement>('#broadcast-rotate').checked=broadcast.rotate;
   $('#snapshot').textContent = `${catalog.snapshotEnd.replaceAll('-','.')} 기준`;
   $('#matching-note').textContent = catalog.matchingRule + ` 위경도가 없는 원본 ${catalog.stats.unlocated??0}건은 별도 보존하며 지도에서 제외합니다.`;
   $('#source-content').innerHTML = catalog.sources.map(s => `<section class="sheet-section"><h3>${esc(s.name)}</h3><p>${esc(s.coverage)}</p><p class="hint">${esc(s.start)} — ${esc(s.end)} · 원본 ${fmt(s.rawCount)}건</p><a class="text-link" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">공식 데이터 확인 ↗</a></section>`).join('') + `<p class="hint">스냅샷 ${esc(catalog.snapshotEnd)} · 기관 간 연결 ${fmt(catalog.stats.linkedDuplicates)}건<br>웹 화면은 실시간 API를 호출하지 않습니다.</p>`;
@@ -44,6 +50,7 @@ async function boot() {
   }
   bind(); applyTheme(); syncControls(); resetTimeline(); refresh();
   if (sharedEvent) { const e=visible.find(q=>q.id===sharedEvent); if(e)selectEvent(e); }
+  if(broadcast.enabled)setBroadcastMode(true,false);
 }
 function openSheet(id:string) {
   document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d=>d.close());
@@ -51,10 +58,11 @@ function openSheet(id:string) {
 }
 function closeSheet(id:string) { $<HTMLDialogElement>(`#${id}`).close(); }
 function applyTheme() {
-  document.documentElement.dataset.theme=dark?'dark':'light';
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content',dark?'#151619':'#fcfcfd');
+  const effectiveDark=dark&&!broadcast.enabled;
+  document.documentElement.dataset.theme=effectiveDark?'dark':'light';
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content',effectiveDark?'#151619':broadcast.enabled?'#ffffff':'#fcfcfd');
   const b=$('#theme-toggle');b.innerHTML=icon(dark?'sun':'moon');b.setAttribute('aria-pressed',String(dark));b.setAttribute('aria-label','다크 모드');b.setAttribute('aria-description',dark?'현재 다크 모드입니다. 누르면 라이트 모드로 전환합니다.':'현재 라이트 모드입니다. 누르면 다크 모드로 전환합니다.');b.title=dark?'라이트 모드로 전환':'다크 모드로 전환';
-  scene?.setAppearance(dark,depthColors);
+  scene?.setAppearance(effectiveDark,depthColors,broadcast.enabled);
 }
 function syncControls() {
   for(const key of ['from','to'] as const)$<HTMLInputElement>(`#${key}`).value=filters[key];
@@ -86,14 +94,14 @@ function refresh() {
   $<HTMLInputElement>('#timeline-slider').setAttribute('aria-valuetext',`${effectiveTo()}까지 누적 표시`);
   $('#empty-state').hidden=visible.length>0;$('#depth-legend').hidden=!depthColors;
   document.querySelectorAll<HTMLElement>('#histogram i').forEach((e,i)=>e.classList.toggle('future',i/64>cursor/totalDays));
-  renderReading();renderList();renderDetail();updateBear();
+  renderReading();renderList();renderDetail();updateBear();renderBroadcast();
 }
 function renderReading() {
   const root=$('#current-reading');
   if(selected) {
     const e=selected;
     root.innerHTML=`<div class="reading-label">선택한 진원 <button id="deselect" class="tool icon-only small-close" aria-label="선택 해제" title="선택 해제">${icon('close')}</button></div><button id="selected-detail" class="selected-reading" aria-label="선택한 지진 상세 보기"><span class="reading-number"><small>M</small>${e.mag.toFixed(1)}</span><span class="selected-place">${esc(e.place)}${icon('chevron')}</span><span class="reading-meta">${kstDate(e.time).replaceAll('-','.')} · 깊이 ${e.depth===null?'미상':`${e.depth.toFixed(1)} km`}</span></button>`;
-    $('#deselect').onclick=()=>{selected=null;scene?.select(null);renderReading();renderList();updateBear();};
+    $('#deselect').onclick=()=>{selected=null;scene?.select(null);renderReading();renderList();updateBear();renderBroadcast();};
     $('#selected-detail').onclick=()=>{renderDetail();openSheet('detail-dialog');};
   } else {
     const known=visible.filter(e=>e.depth!==null).length, max=visible.length?Math.max(...visible.map(e=>e.mag)):null;
@@ -110,7 +118,51 @@ function renderDetail() {
   $('#event-detail').innerHTML=`<article class="event-detail"><div class="detail-magnitude"><small>M</small>${e.mag.toFixed(1)}<span>${esc(e.magType)}</span></div><h3>${esc(e.place)}</h3><p class="detail-time">${timeLabel(e.time)} KST</p><dl class="detail-measures"><div><dt>진원 깊이</dt><dd>${e.depth===null?'미상':`${e.depth.toFixed(1)} <small>km</small>`}</dd></div><div><dt>최대진도 · 기상청</dt><dd>${esc(e.intensity??'—')}</dd></div><div><dt>위도</dt><dd>${e.lat.toFixed(3)}° N</dd></div><div><dt>경도</dt><dd>${e.lon.toFixed(3)}° E</dd></div></dl>${e.depth===null?'<p class="hint">깊이 자료가 없어 지표의 빈 원으로 표시합니다.</p>':''}${e.alternate?.length?`<details class="alternate"><summary>다른 기관의 연결 기록 (${e.alternate.length})</summary>${e.alternate.map(a=>`<p>${esc(a.source)} ${esc(a.magType)} ${a.mag.toFixed(1)} · 깊이 ${a.depth===null?'미상':a.depth+' km'}<br><a class="text-link" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">원본 확인 ↗</a></p>`).join('')}<p class="hint">기관별 추정치를 그대로 보존하며 표시값을 대체하지 않습니다.</p></details>`:''}<div class="detail-actions"><button id="focus-event" class="primary-button">${icon('focus')}지도에서 확대</button><a class="text-link" href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${e.source} 원본 ↗</a></div></article>`;
   $('#focus-event').onclick=()=>{closeSheet('detail-dialog');scene?.focus(e);$('.stage').scrollIntoView({behavior:reducedMotion.matches?'instant':'smooth',block:'center'});};
 }
-function selectEvent(e:Quake) { selected=e;scene?.select(e);renderReading();renderDetail();renderList();updateBear();closeSheet('catalog-dialog'); }
+function selectEvent(e:Quake) { selected=e;scene?.select(e);renderReading();renderDetail();renderList();updateBear();renderBroadcast();closeSheet('catalog-dialog'); }
+
+function currentBroadcastURL() {
+  const options={enabled:true,title:$<HTMLInputElement>('#broadcast-title').value,view:$<HTMLSelectElement>('#broadcast-view').value as CameraView,rotate:$<HTMLInputElement>('#broadcast-rotate').checked};
+  const sanitized=readBroadcast(new URLSearchParams({broadcast:'1',title:options.title,view:options.view,rotate:options.rotate?'1':'0'}).toString());
+  return broadcastURL(location.href,{...filters,to:effectiveTo()},scale,depthColors,selected?.id,sanitized);
+}
+function renderBroadcast() {
+  $('#broadcast-heading').textContent=broadcast.title||`${REGIONS[filters.region].name} 진원 분포`;
+  const known=visible.filter(e=>e.depth!==null).length;
+  const largest=visible.length?Math.max(...visible.map(e=>e.mag)):null;
+  const secondary=selected?.source==='KMA'&&selected.intensity?{label:'최대진도 · 기상청',value:selected.intensity}:{label:'관측 자료',value:selected?.source==='KMA'?'기상청':`USGS · ${selected?.magType??''}`};
+  $('#broadcast-summary').innerHTML=selected?`
+    <div class="broadcast-section-label">선택한 지진</div><div class="broadcast-number"><small>M</small>${selected.mag.toFixed(1)}</div>
+    <h2>${esc(selected.place)}</h2><p class="broadcast-event-time">${esc(timeLabel(selected.time))}<small>KST</small></p>
+    <dl class="broadcast-metrics"><div><dt>진원 깊이</dt><dd>${selected.depth===null?'미상':`${selected.depth.toFixed(1)} <small>km</small>`}</dd></div><div><dt>${secondary.label}</dt><dd class="${secondary.label==='관측 자료'?'agency-value':''}">${esc(secondary.value)}</dd></div></dl>
+    <p class="broadcast-coordinates">${selected.lat.toFixed(3)}° N · ${selected.lon.toFixed(3)}° E</p>
+    <p class="broadcast-context">같은 기간의 지진 ${fmt(visible.length)}건</p>`:`
+    <div class="broadcast-section-label">선택 기간의 지진</div><div class="broadcast-number count">${fmt(visible.length)}<small>건</small></div>
+    <h2>${visible.length?'진앙 위치와 지하 깊이':'조건에 맞는 지진 없음'}</h2>
+    <dl class="broadcast-metrics"><div><dt>깊이가 확인된 지진</dt><dd>${fmt(known)} <small>건</small></dd></div><div><dt>최대 규모</dt><dd>${largest===null?'—':`M ${largest.toFixed(1)}`}</dd></div></dl>
+    <p class="broadcast-context">${filters.unknown?'빈 원은 깊이 미상 자료':'깊이 미상 자료 제외'}</p>`;
+  $('#broadcast-period').textContent=`${filters.from.replaceAll('-','.')} — ${effectiveTo().replaceAll('-','.')} · M${filters.minMag.toFixed(1)} 이상`;
+  $('#broadcast-scale').textContent=scale===1?'깊이 실제 비율':`깊이 ${scale}배 강조`;
+  $('.broadcast-source p').textContent=`자료: ${[filters.kma?'기상청':null,filters.usgs?'USGS':null].filter(Boolean).join(' · ')||'선택 없음'}`;
+  $('#broadcast-snapshot').textContent=`자료 기준일 ${catalog.snapshotEnd.replaceAll('-','.')}`;
+  const legend=$('#broadcast-legend');legend.innerHTML=$('#depth-legend').innerHTML;legend.hidden=!depthColors;
+  const url=currentBroadcastURL();$<HTMLTextAreaElement>('#broadcast-url').value=url;$<HTMLAnchorElement>('#broadcast-new').href=url;
+}
+function setBroadcastMode(enabled:boolean,updateURL=true) {
+  pause();
+  if(enabled){const options=readBroadcast(new URL(currentBroadcastURL()).search);Object.assign(broadcast,options);}
+  broadcast.enabled=enabled;
+  document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d=>d.close());
+  document.documentElement.classList.toggle('broadcast-mode',enabled);applyTheme();renderBroadcast();
+  scene?.setView(enabled?broadcast.view:'oblique');
+  rotating=enabled&&broadcast.rotate&&!reducedMotion.matches;scene?.setRotate(rotating);$('#rotate').setAttribute('aria-pressed',String(rotating));
+  if(updateURL){
+    const url=new URL(enabled?currentBroadcastURL():location.href);
+    if(!enabled)for(const k of ['broadcast','view','rotate','title'])url.searchParams.delete(k);
+    history.replaceState(null,'',url);
+  }
+  window.scrollTo(0,0);
+  if(enabled)$<HTMLCanvasElement>('#map-canvas canvas')?.focus({preventScroll:true});
+}
 function renderList() {
   const all=visible.filter(e=>e.place.toLowerCase().includes(listQuery.toLowerCase())).sort((a,b)=>listSort==='latest'?b.time.localeCompare(a.time):listSort==='deepest'?(b.depth??-Infinity)-(a.depth??-Infinity):b.mag-a.mag||b.time.localeCompare(a.time));
   $('#list-count').textContent=`표시 조건에 맞는 ${fmt(visible.length)}건`;
@@ -136,7 +188,7 @@ function changeRegion(region:Region) {
   scene?.setRegion(region);syncControls();histogram();refresh();setView('oblique');
 }
 function bind() {
-  const openings:Record<string,string>={'period-open':'period-dialog','period-summary':'period-dialog','display-open':'display-dialog','list-open':'catalog-dialog','more-open':'more-dialog','source-open':'sources-dialog','more-source':'sources-dialog'};
+  const openings:Record<string,string>={'period-open':'period-dialog','period-summary':'period-dialog','display-open':'display-dialog','list-open':'catalog-dialog','more-open':'more-dialog','source-open':'sources-dialog','more-source':'sources-dialog','broadcast-open':'broadcast-dialog','more-broadcast':'broadcast-dialog'};
   for(const [button,id] of Object.entries(openings))$(`#${button}`).onclick=()=>openSheet(id);
   document.querySelectorAll<HTMLButtonElement>('[data-close]').forEach(b=>b.onclick=()=>closeSheet(b.dataset.close!));
   document.querySelectorAll<HTMLDialogElement>('dialog').forEach(d=>d.addEventListener('click',e=>{const r=d.getBoundingClientRect();if(e.target===d&&(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom))d.close();}));
@@ -154,7 +206,7 @@ function bind() {
   $<HTMLInputElement>('#magnitude').oninput=e=>{filters.minMag=Number((e.target as HTMLInputElement).value);listLimit=40;histogram();refresh();};
   $<HTMLInputElement>('#depth').oninput=e=>{filters.maxDepth=Number((e.target as HTMLInputElement).value);histogram();refresh();};
   for(const key of ['unknown','kma','usgs'] as const)$<HTMLInputElement>(`#${key}`).onchange=e=>{filters[key]=(e.target as HTMLInputElement).checked;histogram();refresh();};
-  $('#depth-colors').onchange=e=>{depthColors=(e.target as HTMLInputElement).checked;scene?.setAppearance(dark,depthColors);$('#depth-legend').hidden=!depthColors;};
+  $('#depth-colors').onchange=e=>{depthColors=(e.target as HTMLInputElement).checked;applyTheme();$('#depth-legend').hidden=!depthColors;renderBroadcast();};
   $('#scale').onchange=e=>{scale=Number((e.target as HTMLSelectElement).value);refresh();};$('#reset').onclick=reset;$('#empty-reset').onclick=reset;
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view as 'oblique'|'top'|'side'));$('#view-reset').onclick=()=>setView('oblique');
   $('#rotate').onclick=()=>{if(reducedMotion.matches){toast('동작 줄이기 설정에 따라 수동 회전을 사용해주세요.');return;}rotating=!rotating;scene?.setRotate(rotating);$('#rotate').setAttribute('aria-pressed',String(rotating));};
@@ -179,5 +231,15 @@ function bind() {
     changeRegion(c.region);syncControls();resetTimeline();refresh();const q=[...visible].sort((a,b)=>b.mag-a.mag)[0];if(q)selectEvent(q);closeSheet('period-dialog');
   });
   window.addEventListener('pagehide',()=>pause());
+  for(const id of ['broadcast-title','broadcast-view','broadcast-rotate'])$(`#${id}`).addEventListener('input',()=>renderBroadcast());
+  $('#broadcast-preview').onclick=()=>setBroadcastMode(true);
+  $('#broadcast-exit').onclick=()=>setBroadcastMode(false);
+  $('#broadcast-copy').onclick=async()=>{const url=currentBroadcastURL();try{await navigator.clipboard.writeText(url);toast('방송용 주소를 복사했습니다.');}catch{$<HTMLTextAreaElement>('#broadcast-url').focus();$<HTMLTextAreaElement>('#broadcast-url').select();toast('선택한 방송용 주소를 복사해주세요.');}};
+  window.addEventListener('keydown',e=>{
+    const target=e.target as Element|null;
+    if(e.repeat||e.ctrlKey||e.metaKey||e.altKey||target?.closest('input,textarea,select,[contenteditable="true"]')||document.querySelector('dialog[open]'))return;
+    if(e.key.toLowerCase()==='b'){e.preventDefault();setBroadcastMode(!broadcast.enabled);}
+    else if(e.key==='Escape'&&broadcast.enabled){e.preventDefault();setBroadcastMode(false);}
+  });
 }
 boot().catch(error=>{console.error(error);app.innerHTML=`<div class="loading"><img src="${base}mascot/brand.png" alt="" width="64" height="64"><h1>기록을 불러오지 못했어요</h1><p>연결 상태를 확인한 뒤 다시 시도해주세요.</p><button id="retry" class="primary-button">다시 불러오기</button><small>${esc(error instanceof Error?error.message:error)}</small></div>`;$('#retry').onclick=()=>location.reload();});
