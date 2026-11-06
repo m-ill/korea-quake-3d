@@ -14,6 +14,10 @@ export class QuakeScene {
   private down=[0,0]; private resizeObserver:ResizeObserver;private frame=0;private last=performance.now();
   private needsRender=true;private hidden=false;private onVisibility=()=>{this.hidden=document.hidden;this.last=performance.now();};
   private dark=false;private depthColors=false;private hasSize=false;private broadcast=false;
+  onManualControl?:()=>void;
+  get hasTour(){return !!this.tour;}
+  private tourPaused=false;
+  private tour?:{stage:number;elapsed:number;interval:number;hero:Quake|null;from:THREE.Vector3;target:THREE.Vector3;change:(e:Quake|null,label:string)=>void};
   private fitDistance(direction:THREE.Vector3,aspect:number,target:THREE.Vector3){
     const b=REGIONS[this.region].bounds;
     const maxDepth=Math.max(this.region==='korea'?100:700,...this.events.map(e=>e.depth??0));
@@ -41,6 +45,7 @@ export class QuakeScene {
     this.controls=new OrbitControls(this.camera,this.renderer.domElement);this.controls.enableDamping=!matchMedia('(prefers-reduced-motion: reduce)').matches;this.controls.dampingFactor=.075;
     this.controls.autoRotateSpeed=.42;this.controls.minDistance=40;this.controls.maxDistance=40000;this.controls.maxPolarAngle=Math.PI*.94;
     this.controls.addEventListener('change',()=>{this.needsRender=true;});
+    this.controls.addEventListener('start',()=>this.onManualControl?.());
     this.scene.add(this.mapGroup,this.pointsGroup,this.focusGroup);
     this.renderer.domElement.addEventListener('pointerdown',e=>{this.down=[e.clientX,e.clientY];});
     this.renderer.domElement.addEventListener('pointerup',e=>{
@@ -53,7 +58,7 @@ export class QuakeScene {
       if(e.key==='ArrowLeft')spherical.theta-=.12;else if(e.key==='ArrowRight')spherical.theta+=.12;
       else if(e.key==='ArrowUp')spherical.phi=Math.max(.01,spherical.phi-.12);else if(e.key==='ArrowDown')spherical.phi=Math.min(Math.PI-.01,spherical.phi+.12);
       else if(e.key==='+'||e.key==='=')spherical.radius*=.9;else if(e.key==='-')spherical.radius*=1.1;else return;
-      e.preventDefault();this.camera.position.copy(this.controls.target).add(new THREE.Vector3().setFromSpherical(spherical));this.controls.update();
+      e.preventDefault();this.onManualControl?.();this.camera.position.copy(this.controls.target).add(new THREE.Vector3().setFromSpherical(spherical));this.controls.update();
     });
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(host);
     document.addEventListener('visibilitychange',this.onVisibility);
@@ -157,12 +162,40 @@ export class QuakeScene {
     const offsets={oblique:new THREE.Vector3(550,1050,1250),top:new THREE.Vector3(0,1900,1),side:new THREE.Vector3(0,30,1700)};
     const direction=offsets[view].normalize();this.camera.position.copy(this.controls.target).addScaledVector(direction,this.fitDistance(direction,aspect,this.controls.target));this.controls.update();this.needsRender=true;
   }
-  setRotate(value:boolean){this.controls.autoRotate=value;this.needsRender=true;}
+  setRotate(value:boolean,speed=.4){this.controls.autoRotate=value;this.controls.autoRotateSpeed=speed;this.needsRender=true;}
+  startTour(hero:Quake|null,interval:number,speed:number,change:(e:Quake|null,label:string)=>void){
+    this.stopTour();this.controls.autoRotate=false;this.controls.autoRotateSpeed=speed;this.controls.enableDamping=false;this.controls.update();
+    this.tourPaused=false;this.tour={stage:0,elapsed:0,interval,hero,from:this.camera.position.clone(),target:this.controls.target.clone(),change};
+    change(null,'전체 분포');
+  }
+  stopTour(){this.tour=undefined;this.controls.enableDamping=!matchMedia('(prefers-reduced-motion: reduce)').matches;}
+  pauseTour(paused:boolean){
+    if(this.tour&&this.tourPaused&&!paused){this.tour.from.copy(this.camera.position);this.tour.target.copy(this.controls.target);this.tour.elapsed=0;}
+    this.tourPaused=paused;
+  }
+  private animateTour(dt:number){
+    const t=this.tour;if(!t||this.tourPaused)return;t.elapsed+=dt;
+    if(t.elapsed>=t.interval){
+      t.stage=(t.stage+1)%4;t.elapsed=0;t.from.copy(this.camera.position);t.target.copy(this.controls.target);
+      t.change(t.stage===2?t.hero:null,['전체 분포','진원 깊이',t.hero?'주요 지진':'전체 분포','위에서 보기'][t.stage]);
+    }
+    const depth=this.region==='korea'?100:700;
+    const target=t.stage===2&&t.hero?this.point(t.hero.lon,t.hero.lat,t.hero.depth??0):new THREE.Vector3(0,-depth*this.scale*(t.stage===3?0:.4),0);
+    const direction=[new THREE.Vector3(550,1050,1250),new THREE.Vector3(-700,120,1700),new THREE.Vector3(650,700,1100),new THREE.Vector3(0,1900,1)][t.stage].normalize();
+    const distance=t.stage===2&&t.hero?(this.region==='korea'?500:1100):this.fitDistance(direction,this.camera.aspect,target);
+    const end=new THREE.Spherical().setFromVector3(direction.multiplyScalar(distance));
+    const start=new THREE.Spherical().setFromVector3(t.from.clone().sub(t.target));
+    const delta=Math.atan2(Math.sin(end.theta-start.theta),Math.cos(end.theta-start.theta));
+    const p=Math.min(1,t.elapsed/4),ease=p*p*(3-2*p);
+    const drift=t.stage===3?0:Math.max(0,t.elapsed-4)*this.controls.autoRotateSpeed*.018;
+    const offset=new THREE.Spherical(THREE.MathUtils.lerp(start.radius,end.radius,ease),THREE.MathUtils.lerp(start.phi,end.phi,ease),start.theta+delta*ease+drift);
+    this.controls.target.lerpVectors(t.target,target,ease);this.camera.position.copy(this.controls.target).add(new THREE.Vector3().setFromSpherical(offset));this.needsRender=true;
+  }
   setAppearance(dark:boolean,depthColors:boolean,broadcast=false){this.dark=dark;this.depthColors=depthColors;this.broadcast=broadcast;this.renderer.setClearColor(this.palette.background,0);this.controls.enableDamping=!matchMedia('(prefers-reduced-motion: reduce)').matches;this.buildMap();this.updateEvents(this.events,this.scale);}
   screenshot(){this.renderer.setClearAlpha(1);this.renderer.render(this.scene,this.camera);const image=this.renderer.domElement.toDataURL('image/png');this.renderer.setClearAlpha(0);this.needsRender=true;return image;}
   private animate=()=>{
-    this.frame=requestAnimationFrame(this.animate);const now=performance.now(),dt=Math.min((now-this.last)/1000,.1);this.last=now;if(this.hidden)return;
-    this.controls.update(dt);
+    this.frame=requestAnimationFrame(this.animate);const now=performance.now(),elapsed=(now-this.last)/1000,dt=Math.min(elapsed,.1);this.last=now;if(this.hidden)return;
+    this.animateTour(elapsed);this.controls.update(dt);
     if(this.needsRender||this.controls.autoRotate){
       const h=this.host.clientHeight;for(const l of this.labels){const angle=this.controls.getPolarAngle();l.sprite.visible=(!l.depth||angle>.12)&&(!this.broadcast||!l.city||angle<1.35);const distance=l.sprite.position.distanceTo(this.camera.position);const height=distance*2*Math.tan(THREE.MathUtils.degToRad(this.camera.fov/2));const size=height/Math.max(h,1)*(this.broadcast?42:26);l.sprite.scale.set(size*8,size,1);}
       const ring=this.focusGroup.children[0];if(ring)ring.quaternion.copy(this.camera.quaternion);

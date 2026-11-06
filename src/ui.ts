@@ -28,7 +28,7 @@ export function layout(catalog:Catalog) {
       <div id="empty-state" hidden><h2>표시할 지진이 없어요</h2><p>기간이나 표시 조건을 조금 넓혀보세요.</p><button id="empty-reset">조건 초기화</button></div>
     </section>
     <aside class="broadcast-summary" id="broadcast-summary" aria-label="방송용 핵심 정보"></aside>
-    <footer class="broadcast-footer"><div><p id="broadcast-period"></p><div class="broadcast-footnotes"><span id="broadcast-scale"></span><span>점 크기: 규모 · 빈 원: 깊이 미상</span></div><div id="broadcast-legend" hidden></div></div><div class="broadcast-source"><p>자료: 기상청 · USGS</p><span id="broadcast-snapshot"></span></div><button class="broadcast-mobile-exit" id="broadcast-exit">일반 화면으로</button></footer>
+    <footer class="broadcast-footer"><div><p id="broadcast-period"></p><div class="broadcast-footnotes"><span id="broadcast-scale"></span><span id="broadcast-motion-status"></span><span>점 크기: 규모 · 빈 원: 깊이 미상</span></div><div id="broadcast-legend" hidden></div></div><div class="broadcast-source"><p>자료: 기상청 · USGS</p><span id="broadcast-snapshot"></span></div><button class="broadcast-mobile-exit" id="broadcast-exit">일반 화면으로</button></footer>
     <div class="map-toolbar">
       <div class="segmented view-tools" role="group" aria-label="카메라 시점"><button data-view="oblique" aria-pressed="true">3D</button><button data-view="top" aria-pressed="false">위에서</button><button data-view="side" aria-pressed="false">옆에서</button></div>
       <div class="view-actions"><span id="scale-badge" class="quiet-label"></span><button id="rotate" class="tool icon-only" title="자동 회전" aria-label="자동 회전" aria-pressed="false">${icon('orbit')}</button><button id="view-reset" class="tool icon-only" title="시점 초기화" aria-label="시점 초기화">${icon('reset')}</button></div>
@@ -71,7 +71,11 @@ export function layout(catalog:Catalog) {
     <p class="sheet-intro">밝은 배경에 지도와 핵심 정보만 표시합니다. 현재 기간·표시 조건·선택한 지진을 그대로 사용합니다.</p>
     <label class="broadcast-title-field" for="broadcast-title">화면 제목<input id="broadcast-title" type="text" maxlength="60" placeholder="영역에 맞는 제목을 자동으로 표시"></label>
     <div class="setting-row"><label for="broadcast-view">시작 시점</label><select id="broadcast-view"><option value="oblique">3D · 기울여 보기</option><option value="top">위에서 보기</option><option value="side">옆에서 보기</option></select></div>
-    <label class="check-row"><span>자동 회전<small>주소를 열면 천천히 회전합니다.</small></span><input id="broadcast-rotate" type="checkbox"></label>
+    <div class="setting-row"><label for="broadcast-motion">자동 연출</label><select id="broadcast-motion"><option value="still">고정 화면</option><option value="orbit">계속 회전</option><option value="tour">장면 순환</option></select></div>
+    <p class="hint">장면 순환: 전체 → 깊이 → 주요 지진 확대 → 위에서 보기. 선택한 지진을 강조하고, 선택이 없으면 현재 조건의 최대 규모 지진을 사용합니다.</p>
+    <div class="setting-row"><label for="broadcast-interval">장면 간격</label><select id="broadcast-interval"><option value="12">12초 · 빠르게</option><option value="20">20초 · 기본</option><option value="30">30초 · 여유롭게</option></select></div>
+    <div class="setting-row"><label for="broadcast-speed">회전 속도</label><select id="broadcast-speed"><option value="0.4">느리게</option><option value="0.8">보통</option><option value="1.6">빠르게</option></select></div>
+    <p class="hint">드래그·휠·방향키 조작 시 자동 연출이 멈춥니다. 방송 화면에서 Space로 일시정지·재개합니다. 동작 줄이기 설정에서는 고정 화면으로 표시합니다.</p>
     <div class="broadcast-setup-actions"><button class="primary-button" id="broadcast-preview">미리보기</button><a id="broadcast-new" class="text-link" target="_blank" rel="noopener noreferrer">새 창에서 열기 ↗</a></div>
     <section class="sheet-section"><h3>OBS 브라우저 소스에 사용</h3><p>아래 주소를 브라우저 소스 URL에 넣고 너비 1920, 높이 1080으로 설정하세요. 조작 도구와 알림은 방송 화면에 표시되지 않습니다.</p><label class="sr-only" for="broadcast-url">방송용 주소</label><textarea id="broadcast-url" readonly rows="3"></textarea><button id="broadcast-copy" class="quiet-button">방송용 주소 복사</button><p class="hint">방송 화면에서도 드래그·휠과 점 선택을 사용할 수 있습니다. B 또는 Esc 키로 일반 화면으로 돌아옵니다. 과거 자료의 기간과 기준일은 화면에 항상 표시합니다.</p></section>`)}
   ${dialog('sources-dialog','데이터와 조작 안내',`

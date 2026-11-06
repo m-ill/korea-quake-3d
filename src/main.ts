@@ -18,6 +18,7 @@ app.innerHTML = `<div class="loading"><img src="${base}mascot/brand.png" alt="" 
 let catalog:Catalog, scene:QuakeScene|undefined, filters:Filters;
 let selected:Quake|null = null, visible:Quake[] = [], scale = 4;
 let rotating = false, playing = false, depthColors = false;
+let tourHero:Quake|null|undefined, motionPaused=false, motionLabel='전체 분포';
 let cursor = 1, totalDays = 1, listSort = 'latest', listQuery = '', listLimit = 40;
 let playTimer:number|undefined, toastTimer:number|undefined;
 const timeLabel = (s:string) => new Intl.DateTimeFormat('ko-KR', {
@@ -39,7 +40,9 @@ async function boot() {
   app.innerHTML = layout(catalog);
   $<HTMLInputElement>('#broadcast-title').value=broadcast.title;
   $<HTMLSelectElement>('#broadcast-view').value=broadcast.view;
-  $<HTMLInputElement>('#broadcast-rotate').checked=broadcast.rotate;
+  $<HTMLSelectElement>('#broadcast-motion').value=broadcast.tour?'tour':broadcast.rotate?'orbit':'still';
+  $<HTMLSelectElement>('#broadcast-interval').value=String(broadcast.interval);
+  $<HTMLSelectElement>('#broadcast-speed').value=String(broadcast.speed);
   $('#snapshot').textContent = `${catalog.snapshotEnd.replaceAll('-','.')} 기준`;
   $('#matching-note').textContent = catalog.matchingRule + ` 위경도가 없는 원본 ${catalog.stats.unlocated??0}건은 별도 보존하며 지도에서 제외합니다.`;
   $('#source-content').innerHTML = catalog.sources.map(s => `<section class="sheet-section"><h3>${esc(s.name)}</h3><p>${esc(s.coverage)}</p><p class="hint">${esc(s.start)} — ${esc(s.end)} · 원본 ${fmt(s.rawCount)}건</p><a class="text-link" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">공식 데이터 확인 ↗</a></section>`).join('') + `<p class="hint">스냅샷 ${esc(catalog.snapshotEnd)} · 기관 간 연결 ${fmt(catalog.stats.linkedDuplicates)}건<br>웹 화면은 실시간 API를 호출하지 않습니다.</p>`;
@@ -48,6 +51,7 @@ async function boot() {
   catch (error) {
     $('#map-canvas').innerHTML = '<div class="webgl-error"><h2>3D 지도를 시작하지 못했어요</h2><p>브라우저의 하드웨어 가속과 WebGL 지원을 확인해주세요.<br>목록과 CSV 저장은 계속 사용할 수 있습니다.</p></div>';console.error(error);
   }
+  if(scene)scene.onManualControl=()=>{if(broadcast.enabled&&(broadcast.tour||broadcast.rotate))pauseBroadcastMotion(true);};
   bind(); applyTheme(); syncControls(); resetTimeline(); refresh();
   if (sharedEvent) { const e=visible.find(q=>q.id===sharedEvent); if(e)selectEvent(e); }
   if(broadcast.enabled)setBroadcastMode(true,false);
@@ -121,9 +125,9 @@ function renderDetail() {
 function selectEvent(e:Quake) { selected=e;scene?.select(e);renderReading();renderDetail();renderList();updateBear();renderBroadcast();closeSheet('catalog-dialog'); }
 
 function currentBroadcastURL() {
-  const options={enabled:true,title:$<HTMLInputElement>('#broadcast-title').value,view:$<HTMLSelectElement>('#broadcast-view').value as CameraView,rotate:$<HTMLInputElement>('#broadcast-rotate').checked};
-  const sanitized=readBroadcast(new URLSearchParams({broadcast:'1',title:options.title,view:options.view,rotate:options.rotate?'1':'0'}).toString());
-  return broadcastURL(location.href,{...filters,to:effectiveTo()},scale,depthColors,selected?.id,sanitized);
+  const motion=$<HTMLSelectElement>('#broadcast-motion').value;
+  const sanitized=readBroadcast(new URLSearchParams({broadcast:'1',title:$<HTMLInputElement>('#broadcast-title').value,view:$<HTMLSelectElement>('#broadcast-view').value as CameraView,rotate:motion==='orbit'?'1':'0',tour:motion==='tour'?'1':'0',interval:$<HTMLSelectElement>('#broadcast-interval').value,speed:$<HTMLSelectElement>('#broadcast-speed').value}).toString());
+  return broadcastURL(location.href,{...filters,to:effectiveTo()},scale,depthColors,(broadcast.enabled&&broadcast.tour&&tourHero!==undefined?tourHero:selected)?.id,sanitized);
 }
 function renderBroadcast() {
   $('#broadcast-heading').textContent=broadcast.title||`${REGIONS[filters.region].name} 진원 분포`;
@@ -142,6 +146,7 @@ function renderBroadcast() {
     <p class="broadcast-context">${filters.unknown?'빈 원은 깊이 미상 자료':'깊이 미상 자료 제외'}</p>`;
   $('#broadcast-period').textContent=`${filters.from.replaceAll('-','.')} — ${effectiveTo().replaceAll('-','.')} · M${filters.minMag.toFixed(1)} 이상`;
   $('#broadcast-scale').textContent=scale===1?'깊이 실제 비율':`깊이 ${scale}배 강조`;
+  const status=$('#broadcast-motion-status');status.textContent=!(broadcast.tour||broadcast.rotate)?'고정 화면':reducedMotion.matches?'고정 화면 · 동작 줄이기':motionPaused?'자동 연출 일시정지 · Space로 재개':broadcast.tour?`자동 연출 · ${motionLabel}`:'자동 회전';
   $('.broadcast-source p').textContent=`자료: ${[filters.kma?'기상청':null,filters.usgs?'USGS':null].filter(Boolean).join(' · ')||'선택 없음'}`;
   $('#broadcast-snapshot').textContent=`자료 기준일 ${catalog.snapshotEnd.replaceAll('-','.')}`;
   const legend=$('#broadcast-legend');legend.innerHTML=$('#depth-legend').innerHTML;legend.hidden=!depthColors;
@@ -149,19 +154,32 @@ function renderBroadcast() {
 }
 function setBroadcastMode(enabled:boolean,updateURL=true) {
   pause();
+  scene?.stopTour();
+  if(!enabled&&tourHero!==undefined){selected=tourHero;scene?.select(selected);renderReading();renderDetail();renderList();updateBear();tourHero=undefined;}
   if(enabled){const options=readBroadcast(new URL(currentBroadcastURL()).search);Object.assign(broadcast,options);}
   broadcast.enabled=enabled;
   document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d=>d.close());
   document.documentElement.classList.toggle('broadcast-mode',enabled);applyTheme();renderBroadcast();
   scene?.setView(enabled?broadcast.view:'oblique');
-  rotating=enabled&&broadcast.rotate&&!reducedMotion.matches;scene?.setRotate(rotating);$('#rotate').setAttribute('aria-pressed',String(rotating));
+  motionPaused=false;rotating=enabled&&broadcast.rotate&&!broadcast.tour&&!reducedMotion.matches;scene?.setRotate(rotating,broadcast.speed);$('#rotate').setAttribute('aria-pressed',String(rotating));
+  if(enabled&&broadcast.tour){
+    tourHero=selected??[...visible].sort((a,b)=>b.mag-a.mag||b.time.localeCompare(a.time)||a.id.localeCompare(b.id))[0]??null;
+    if(!reducedMotion.matches)scene?.startTour(tourHero,broadcast.interval,broadcast.speed,(e,label)=>{selected=e;scene?.select(e);motionLabel=label;renderBroadcast();});
+  }
+  renderBroadcast();
   if(updateURL){
     const url=new URL(enabled?currentBroadcastURL():location.href);
-    if(!enabled)for(const k of ['broadcast','view','rotate','title'])url.searchParams.delete(k);
+    if(!enabled)for(const k of ['broadcast','view','rotate','title','tour','interval','speed'])url.searchParams.delete(k);
     history.replaceState(null,'',url);
   }
   window.scrollTo(0,0);
   if(enabled)$<HTMLCanvasElement>('#map-canvas canvas')?.focus({preventScroll:true});
+}
+function pauseBroadcastMotion(paused:boolean){
+  if(!paused&&!reducedMotion.matches&&broadcast.tour&&!scene?.hasTour)scene?.startTour(tourHero??null,broadcast.interval,broadcast.speed,(e,label)=>{selected=e;scene?.select(e);motionLabel=label;renderBroadcast();});
+  motionPaused=paused;scene?.pauseTour(paused||reducedMotion.matches);
+  rotating=broadcast.enabled&&broadcast.rotate&&!broadcast.tour&&!paused&&!reducedMotion.matches;
+  scene?.setRotate(rotating,broadcast.speed);renderBroadcast();
 }
 function renderList() {
   const all=visible.filter(e=>e.place.toLowerCase().includes(listQuery.toLowerCase())).sort((a,b)=>listSort==='latest'?b.time.localeCompare(a.time):listSort==='deepest'?(b.depth??-Infinity)-(a.depth??-Infinity):b.mag-a.mag||b.time.localeCompare(a.time));
@@ -210,7 +228,7 @@ function bind() {
   $('#scale').onchange=e=>{scale=Number((e.target as HTMLSelectElement).value);refresh();};$('#reset').onclick=reset;$('#empty-reset').onclick=reset;
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view as 'oblique'|'top'|'side'));$('#view-reset').onclick=()=>setView('oblique');
   $('#rotate').onclick=()=>{if(reducedMotion.matches){toast('동작 줄이기 설정에 따라 수동 회전을 사용해주세요.');return;}rotating=!rotating;scene?.setRotate(rotating);$('#rotate').setAttribute('aria-pressed',String(rotating));};
-  reducedMotion.addEventListener('change',()=>{if(reducedMotion.matches){rotating=false;scene?.setRotate(false);$('#rotate').setAttribute('aria-pressed','false');}});
+  reducedMotion.addEventListener('change',()=>{if(reducedMotion.matches){rotating=false;scene?.setRotate(false);scene?.pauseTour(true);motionPaused=true;$('#rotate').setAttribute('aria-pressed','false');}renderBroadcast();});
   $('#screenshot').onclick=()=>{if(scene){download(scene.screenshot(),`korea-quake-${effectiveTo()}.png`);closeSheet('more-dialog');}else toast('3D 지도를 시작하지 못했습니다.');};
   $('#export').onclick=()=>{download(new Blob([csv(visible)],{type:'text/csv;charset=utf-8'}),`korea-quakes-${filters.from}-${effectiveTo()}.csv`);closeSheet('more-dialog');toast(`${fmt(visible.length)}건을 CSV로 저장했습니다.`);};
   $('#share').onclick=async()=>{
@@ -231,7 +249,7 @@ function bind() {
     changeRegion(c.region);syncControls();resetTimeline();refresh();const q=[...visible].sort((a,b)=>b.mag-a.mag)[0];if(q)selectEvent(q);closeSheet('period-dialog');
   });
   window.addEventListener('pagehide',()=>pause());
-  for(const id of ['broadcast-title','broadcast-view','broadcast-rotate'])$(`#${id}`).addEventListener('input',()=>renderBroadcast());
+  for(const id of ['broadcast-title','broadcast-view','broadcast-motion','broadcast-interval','broadcast-speed'])$(`#${id}`).addEventListener('input',()=>renderBroadcast());
   $('#broadcast-preview').onclick=()=>setBroadcastMode(true);
   $('#broadcast-exit').onclick=()=>setBroadcastMode(false);
   $('#broadcast-copy').onclick=async()=>{const url=currentBroadcastURL();try{await navigator.clipboard.writeText(url);toast('방송용 주소를 복사했습니다.');}catch{$<HTMLTextAreaElement>('#broadcast-url').focus();$<HTMLTextAreaElement>('#broadcast-url').select();toast('선택한 방송용 주소를 복사해주세요.');}};
@@ -240,6 +258,7 @@ function bind() {
     if(e.repeat||e.ctrlKey||e.metaKey||e.altKey||target?.closest('input,textarea,select,[contenteditable="true"]')||document.querySelector('dialog[open]'))return;
     if(e.key.toLowerCase()==='b'){e.preventDefault();setBroadcastMode(!broadcast.enabled);}
     else if(e.key==='Escape'&&broadcast.enabled){e.preventDefault();setBroadcastMode(false);}
+    else if(e.code==='Space'&&broadcast.enabled&&(broadcast.tour||broadcast.rotate)){e.preventDefault();pauseBroadcastMotion(!motionPaused);}
   });
 }
 boot().catch(error=>{console.error(error);app.innerHTML=`<div class="loading"><img src="${base}mascot/brand.png" alt="" width="64" height="64"><h1>기록을 불러오지 못했어요</h1><p>연결 상태를 확인한 뒤 다시 시도해주세요.</p><button id="retry" class="primary-button">다시 불러오기</button><small>${esc(error instanceof Error?error.message:error)}</small></div>`;$('#retry').onclick=()=>location.reload();});
