@@ -157,12 +157,9 @@ function renderBroadcast() {
   const motionButton=$('#broadcast-motion-toggle');
   motionButton.hidden=!(broadcast.tour||broadcast.rotate)||reducedMotion.matches;
   motionButton.textContent=motionPaused?'자동 연출 재개':'자동 연출 일시정지';
-  $('#broadcast-period').textContent=`${filters.from.replaceAll('-','.')} — ${effectiveTo().replaceAll('-','.')} · M${filters.minMag.toFixed(1)} 이상`;
-  $('#broadcast-scale').textContent=scale===1?'깊이 실제 비율':`깊이 ${scale}배 강조`;
   const status=$('#broadcast-motion-status');status.textContent=!(broadcast.tour||broadcast.rotate)?'고정 화면':reducedMotion.matches?'고정 화면 · 동작 줄이기':motionPaused?'자동 연출 일시정지 · Space로 재개':broadcast.tour?`자동 연출 · ${motionLabel}`:'자동 회전';
-  $('.broadcast-source p').textContent=`자료: ${[filters.kma?'기상청':null,filters.usgs?'USGS':null].filter(Boolean).join(' · ')||'선택 없음'}`;
+  $('#broadcast-source').textContent=`자료: ${[filters.kma?'기상청':null,filters.usgs?'USGS':null].filter(Boolean).join(' · ')||'선택 없음'}`;
   $('#broadcast-snapshot').textContent=`자료 기준일 ${catalog.snapshotEnd.replaceAll('-','.')}`;
-  const legend=$('#broadcast-legend');legend.innerHTML=$('#depth-legend').innerHTML;legend.hidden=!depthColors;
   $<HTMLTextAreaElement>('#broadcast-url').value=currentBroadcastURL(true);$<HTMLAnchorElement>('#broadcast-new').href=currentBroadcastURL();
 }
 function setBroadcastSettings(open:boolean) {
