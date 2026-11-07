@@ -133,13 +133,34 @@ export class QuakeScene {
   updateEvents(events:Quake[],scale:number){
     const changed=this.scale!==scale;this.scale=scale;if(changed)this.buildMap();this.events=events;this.eventDepth=events.reduce((max,e)=>Math.max(max,e.depth??0),0);
     this.clear(this.pointsGroup);this.known=events.filter(e=>e.depth!==null);this.unknown=events.filter(e=>e.depth===null);
-    const geo=new THREE.SphereGeometry(1,10,7), material=new THREE.MeshBasicMaterial({color:0xffffff});
+    const geo=new THREE.SphereGeometry(1,10,7);
+    const material=new THREE.MeshBasicMaterial({
+      color:0xffffff,
+      transparent:true,
+      opacity:.55,
+      depthWrite:false,
+    });
     this.mesh=new THREE.InstancedMesh(geo,material,this.known.length);
-    this.rings=new THREE.InstancedMesh(new THREE.RingGeometry(.65,1,16),new THREE.MeshBasicMaterial({color:this.palette.ring,side:THREE.DoubleSide,transparent:true,opacity:.6,depthWrite:false}),this.unknown.length);
+    this.rings=new THREE.InstancedMesh(new THREE.RingGeometry(.73,1,16),new THREE.MeshBasicMaterial({color:this.palette.ring,side:THREE.DoubleSide,transparent:true,opacity:.55,depthWrite:false}),this.unknown.length);
     const dummy=new THREE.Object3D(),color=new THREE.Color();
-    const base=(this.region==='korea'?1:2.2)*(this.broadcast?1.25:1);
-    this.known.forEach((e,i)=>{dummy.position.copy(this.point(e.lon,e.lat,e.depth!));dummy.rotation.set(0,0,0);dummy.scale.setScalar(base*(2+Math.max(e.mag,0)**1.6*.48));dummy.updateMatrix();this.mesh!.setMatrixAt(i,dummy.matrix);this.mesh!.setColorAt(i,color.set(this.depthColors?depthColor(e.depth):this.palette.point));});
-    this.unknown.forEach((e,i)=>{dummy.position.copy(this.point(e.lon,e.lat));dummy.position.y=1;dummy.rotation.set(-Math.PI/2,0,0);dummy.scale.setScalar(base*(2+Math.max(e.mag,0)**1.6*.48));dummy.updateMatrix();this.rings!.setMatrixAt(i,dummy.matrix);});
+    const base=(this.region==='korea'?1:2.2)*(this.broadcast?1.1:1);
+    const markerRadius=(magnitude:number)=>base*(1.5+Math.max(magnitude,0)**1.4*.4);
+    this.known.forEach((e,i)=>{
+      dummy.position.copy(this.point(e.lon,e.lat,e.depth!));
+      dummy.rotation.set(0,0,0);
+      dummy.scale.setScalar(markerRadius(e.mag));
+      dummy.updateMatrix();
+      this.mesh!.setMatrixAt(i,dummy.matrix);
+      this.mesh!.setColorAt(i,color.set(this.depthColors?depthColor(e.depth):this.palette.point));
+    });
+    this.unknown.forEach((e,i)=>{
+      dummy.position.copy(this.point(e.lon,e.lat));
+      dummy.position.y=1;
+      dummy.rotation.set(-Math.PI/2,0,0);
+      dummy.scale.setScalar(markerRadius(e.mag));
+      dummy.updateMatrix();
+      this.rings!.setMatrixAt(i,dummy.matrix);
+    });
     this.mesh.computeBoundingSphere();this.rings.computeBoundingSphere();this.pointsGroup.add(this.mesh,this.rings);this.select(this.selected);this.needsRender=true;
   }
   private pick(x:number,y:number){
@@ -150,10 +171,10 @@ export class QuakeScene {
   }
   select(e:Quake|null){
     this.selected=e;this.clear(this.focusGroup);if(!e||!this.events.some(q=>q.id===e.id)){this.needsRender=true;return;}
-    const p=this.point(e.lon,e.lat,e.depth??0);const radius=(this.region==='korea'?13:26)*(this.broadcast?1.3:1);
-    const ring=new THREE.Mesh(new THREE.TorusGeometry(radius,1.2,6,48),new THREE.MeshBasicMaterial({color:this.palette.selection,depthTest:false,transparent:true,opacity:.95}));ring.position.copy(p);this.focusGroup.add(ring);
+    const p=this.point(e.lon,e.lat,e.depth??0);const radius=(this.region==='korea'?10:20)*(this.broadcast?1.3:1);
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(radius,.8,6,48),new THREE.MeshBasicMaterial({color:this.palette.selection,depthTest:false,transparent:true,opacity:.9,depthWrite:false}));ring.position.copy(p);this.focusGroup.add(ring);
     const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([p,this.point(e.lon,e.lat)]),new THREE.LineDashedMaterial({color:this.palette.selection,dashSize:5,gapSize:4,transparent:true,opacity:.65,depthTest:false}));line.computeLineDistances();this.focusGroup.add(line);
-    const highlight=new THREE.Mesh(new THREE.SphereGeometry(radius*.32,12,8),new THREE.MeshBasicMaterial({color:this.palette.selection,depthTest:false}));highlight.position.copy(p);this.focusGroup.add(highlight);this.needsRender=true;
+    const highlight=new THREE.Mesh(new THREE.SphereGeometry(radius*.24,12,8),new THREE.MeshBasicMaterial({color:this.palette.selection,depthTest:false,transparent:true,opacity:.75,depthWrite:false}));highlight.position.copy(p);this.focusGroup.add(highlight);this.needsRender=true;
   }
   focus(e:Quake){this.controls.target.copy(this.point(e.lon,e.lat,e.depth??0));const d=this.region==='korea'?400:800;this.camera.position.copy(this.controls.target).add(new THREE.Vector3(d*.5,d*.6,d));this.controls.update();}
   setView(view:'oblique'|'top'|'side'){
