@@ -57,7 +57,6 @@ async function boot() {
   if(broadcast.enabled)setBroadcastMode(true,false);
 }
 function openSheet(id:string) {
-  if(broadcast.enabled&&(broadcast.tour||broadcast.rotate)&&!motionPaused)pauseBroadcastMotion(true);
   document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d=>d.close());
   const d=$<HTMLDialogElement>(`#${id}`);d.showModal();d.scrollTop=0;
 }
@@ -91,11 +90,15 @@ function histogram() {
 }
 function refresh() {
   visible=filterEvents(catalog.events,{...filters,to:effectiveTo()});if(selected&&!visible.some(e=>e.id===selected!.id))selected=null;
-  if(tourHero&&!visible.some(e=>e.id===tourHero?.id)){
+  const refreshTour=broadcast.enabled&&broadcast.tour&&(scene?.hasTour||tourHero)&&(
+    tourHero ? !visible.some(e=>e.id===tourHero?.id) : visible.length>0
+  );
+  if(refreshTour){
     tourHero=null;
     scene?.stopTour();
   }
   scene?.updateEvents(visible,scale);
+  if(refreshTour&&!motionPaused&&!reducedMotion.matches)startBroadcastTour();
   $('#mag-value').textContent=filters.minMag.toFixed(1);$('#depth-value').textContent=String(filters.maxDepth);
   $('#scale-badge').textContent=scale===1?'깊이 1× · 실제 비율':`깊이 ${scale}×`;
   $('#period-label').textContent=`${filters.from.replaceAll('-','.')} — ${filters.to.replaceAll('-','.')} · M${filters.minMag.toFixed(1)}+`;
@@ -145,7 +148,7 @@ function currentBroadcastURL(clean=false) {
 }
 function renderBroadcast() {
   $('#broadcast-heading').textContent=broadcast.title||`${REGIONS[filters.region].name} 진원 분포`;
-  $('#broadcast-preview').textContent=broadcast.enabled?'적용하고 보기':'미리보기';
+  $('#broadcast-preview').textContent=broadcast.enabled?'방송 설정 적용':'미리보기';
   const selection=$('#broadcast-selection');
   selection.hidden=!broadcast.enabled||!selected;
   selection.textContent=selected
@@ -180,6 +183,7 @@ function startBroadcastTour() {
   });
 }
 function setBroadcastMode(enabled:boolean,updateURL=true) {
+  const applyingInPanel=enabled&&broadcast.enabled&&!$('#broadcast-settings').hidden;
   pause();
   scene?.stopTour();
   if(tourHero!==undefined){
@@ -191,7 +195,14 @@ function setBroadcastMode(enabled:boolean,updateURL=true) {
   if(enabled){const options=readBroadcast(new URL(currentBroadcastURL()).search);Object.assign(broadcast,options);}
   broadcast.enabled=enabled;
   document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d=>d.close());
-  setBroadcastSettings(false);
+  if(!applyingInPanel)setBroadcastSettings(false);
+  // Keep one set of controls and listeners for both the dialogs and the inline panel.
+  document.querySelectorAll<HTMLElement>('[data-settings-sheet]').forEach(section=>{
+    const id=section.dataset.settingsSheet!;
+    const destination=enabled?section:$(`#${id}`);
+    const body=$(`#${id}-body`);
+    if(body.parentElement!==destination)destination.append(body);
+  });
   document.documentElement.classList.toggle('broadcast-clean',enabled&&!updateURL&&new URLSearchParams(location.search).get('clean')==='1');
   document.documentElement.classList.toggle('broadcast-mode',enabled);applyTheme();renderBroadcast();
   setView(enabled?broadcast.view:'oblique');
@@ -203,8 +214,10 @@ function setBroadcastMode(enabled:boolean,updateURL=true) {
     if(!enabled)for(const k of ['broadcast','view','rotate','title','tour','interval','speed','clean'])url.searchParams.delete(k);
     history.replaceState(null,'',url);
   }
-  window.scrollTo(0,0);
-  if(enabled)$<HTMLCanvasElement>('#map-canvas canvas')?.focus({preventScroll:true});
+  if(!applyingInPanel){
+    window.scrollTo(0,0);
+    if(enabled)$<HTMLCanvasElement>('#map-canvas canvas')?.focus({preventScroll:true});
+  }
 }
 function pauseBroadcastMotion(paused:boolean){
   if(!paused&&!reducedMotion.matches&&broadcast.tour&&!scene?.hasTour)startBroadcastTour();
@@ -229,7 +242,10 @@ function download(content:Blob|string,name:string) {
 function setView(view:'oblique'|'top'|'side') { scene?.setView(view);document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view))); }
 function reset() {
   filters={region:'korea',from:'2016-01-01',to:catalog.snapshotEnd,minMag:2,maxDepth:100,unknown:true,kma:true,usgs:true};
-  scale=4;selected=null;depthColors=true;rotating=false;scene?.setRotate(false);$('#rotate').setAttribute('aria-pressed','false');$('#date-error').textContent='';
+  scale=4;selected=null;depthColors=true;
+  rotating=broadcast.enabled&&broadcast.rotate&&!motionPaused&&!reducedMotion.matches;
+  scene?.setRotate(rotating,broadcast.speed);
+  $('#rotate').setAttribute('aria-pressed',String(rotating));$('#date-error').textContent='';
   scene?.setRegion('korea');applyTheme();syncControls();resetTimeline();refresh();setView('oblique');
 }
 function changeRegion(region:Region) {
@@ -238,8 +254,7 @@ function changeRegion(region:Region) {
   scene?.setRegion(region);syncControls();histogram();refresh();setView('oblique');
 }
 function bind() {
-  const openings:Record<string,string>={'period-open':'period-dialog','period-summary':'period-dialog','display-open':'display-dialog','list-open':'catalog-dialog','more-open':'more-dialog','source-open':'sources-dialog','more-source':'sources-dialog','broadcast-open':'broadcast-dialog','more-broadcast':'broadcast-dialog',
-    'broadcast-period-open':'period-dialog','broadcast-display-open':'display-dialog','broadcast-list-open':'catalog-dialog','broadcast-edit':'broadcast-dialog'};
+  const openings:Record<string,string>={'period-open':'period-dialog','period-summary':'period-dialog','display-open':'display-dialog','list-open':'catalog-dialog','more-open':'more-dialog','source-open':'sources-dialog','more-source':'sources-dialog','broadcast-open':'broadcast-dialog','more-broadcast':'broadcast-dialog'};
   for(const [button,id] of Object.entries(openings))$(`#${button}`).onclick=()=>openSheet(id);
   document.querySelectorAll<HTMLButtonElement>('[data-close]').forEach(b=>b.onclick=()=>closeSheet(b.dataset.close!));
   document.querySelectorAll<HTMLDialogElement>('dialog').forEach(d=>d.addEventListener('click',e=>{const r=d.getBoundingClientRect();if(e.target===d&&(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom))d.close();}));

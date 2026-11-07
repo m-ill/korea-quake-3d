@@ -128,7 +128,7 @@ input[type="range"]::-moz-range-thumb{width:13px;height:13px;border:0;border-rad
 .sheet-section.first-section{margin-top:0;padding-top:5px;border:0}
 .sheet-section h3{font-size:13px;font-weight:600;line-height:1.7;margin-bottom:12px}
 .sheet-section p{font-size:12px;color:var(--secondary);line-height:1.95;margin-top:10px;word-break:keep-all}
-.sheet .hint{font-size:11px;line-height:1.9;color:var(--muted);margin-top:15px;word-break:keep-all}
+.sheet .hint,#broadcast-settings .hint{font-size:11px;line-height:1.9;color:var(--muted);margin-top:15px;word-break:keep-all}
 .case-list{display:flex;flex-direction:column;margin-top:3px}
 .case-list button{display:flex;align-items:center;gap:12px;min-height:72px;text-align:left;border-radius:8px;padding:9px 0}
 .case-list button:hover{background:var(--surface)}
@@ -239,6 +239,21 @@ select{min-height:44px;border:0;background:var(--surface);color:var(--ink);paddi
 #broadcast-settings .segmented button{flex:1;min-width:0;padding:0 8px}
 #broadcast-settings .action-list{gap:0}
 #broadcast-settings .action-list button{min-height:44px;gap:10px}
+.broadcast-settings-sections details{border-bottom:1px solid var(--line)}
+.broadcast-settings-sections summary{display:flex;align-items:center;gap:10px;min-height:46px;padding:0 8px;border-radius:8px;font-size:14px;cursor:pointer;list-style:none}
+.broadcast-settings-sections summary::-webkit-details-marker{display:none}
+.broadcast-settings-sections summary:hover,.broadcast-settings-sections details[open]>summary{background:var(--surface)}
+.broadcast-settings-sections summary svg:last-child{width:14px;margin-left:auto;color:var(--muted)}
+.broadcast-settings-sections details[open]>summary svg:last-child{transform:rotate(90deg)}
+.broadcast-settings-sections .sheet-body{padding:10px 8px 18px}
+#broadcast-settings .sheet-intro{display:none}
+#broadcast-settings .date-fields{flex-direction:column;gap:10px}
+#broadcast-settings .setting-row{gap:8px}
+#broadcast-settings .setting-row select{max-width:65%;min-width:0}
+#broadcast-settings .measure-setting{margin-bottom:12px}
+#broadcast-settings .setting-value output{font-size:28px;letter-spacing:-.7px}
+#broadcast-settings .sheet-section{margin-top:16px;padding-top:14px}
+#broadcast-settings .broadcast-setup-actions{flex-wrap:wrap}
 .broadcast-mode #broadcast-selection{display:block;position:absolute;bottom:8px;left:0;max-width:100%;padding:6px 10px;background:#fffffff2;border-radius:6px;color:#33465f;font-size:clamp(12px,1.55vh,20px);line-height:1.5;pointer-events:none}
 .broadcast-header h1{font-size:clamp(28px,3.8vh,48px);font-weight:650;letter-spacing:-1.3px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .broadcast-brand{display:flex;align-items:center;gap:12px;font-size:clamp(17px,1.9vh,25px);font-weight:600;flex-shrink:0;line-height:1.4}
@@ -271,6 +286,6 @@ select{min-height:44px;border:0;background:var(--surface);color:var(--ink);paddi
   .broadcast-header{gap:12px!important}.broadcast-kicker{font-size:11px}.broadcast-header h1{font-size:25px;white-space:normal}.broadcast-brand{font-size:12px;gap:5px}.broadcast-brand img{width:30px;height:30px}.broadcast-brand small{font-size:8px}
   .broadcast-mode .stage{height:48dvh;min-height:280px;margin-top:15px;flex-shrink:0}
   .broadcast-header-actions{gap:4px}
-  .broadcast-mode #broadcast-settings{padding:8px 0 12px;border-left:0;border-bottom:1px solid #d9e0e9}
+  .broadcast-mode #broadcast-settings{max-height:min(40dvh,360px);flex-shrink:0;padding:8px 0 12px;border-left:0;border-bottom:1px solid #d9e0e9}
   .broadcast-mode .broadcast-footer{flex-wrap:wrap;align-items:flex-start;padding-top:20px;gap:20px}.broadcast-source{text-align:left}.broadcast-footnotes{flex-wrap:wrap;gap:8px 18px}
 }

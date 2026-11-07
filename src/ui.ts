@@ -3,7 +3,8 @@ import type { Catalog } from './model';
 export const esc=(s:unknown)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 export const fmt=(n:number)=>n.toLocaleString('ko-KR');
 const tool=(id:string,shape:string,name:string)=>`<button class="tool" id="${id}" aria-label="${name}" title="${name}">${icon(shape)}<span>${name}</span></button>`;
-const dialog=(id:string,title:string,body:string,cls='')=>`<dialog id="${id}" class="sheet ${cls}" aria-labelledby="${id}-title"><header class="sheet-header"><h2 id="${id}-title">${title}</h2><button class="done-button" data-close="${id}">완료</button></header>${body}</dialog>`;
+const dialog=(id:string,title:string,body:string,cls='')=>`<dialog id="${id}" class="sheet ${cls}" aria-labelledby="${id}-title"><header class="sheet-header"><h2 id="${id}-title">${title}</h2><button class="done-button" data-close="${id}">완료</button></header><div class="sheet-body" id="${id}-body">${body}</div></dialog>`;
+const settingsSection=(id:string,shape:string,label:string)=>`<details name="broadcast-settings-group" data-settings-sheet="${id}"><summary>${icon(shape)}<span>${label}</span>${icon('chevron')}</summary></details>`;
 export function layout(catalog:Catalog) {
   const end=catalog.snapshotEnd;
   return `
@@ -21,11 +22,13 @@ export function layout(catalog:Catalog) {
       <div class="broadcast-settings-heading"><h2 id="broadcast-settings-title">설정</h2><button id="broadcast-settings-close" class="tool icon-only" aria-label="설정 접기">${icon('close')}</button></div>
       <div class="segmented" role="group" aria-label="탐색 영역"><button data-region="korea" aria-pressed="true">한반도</button><button data-region="eastasia" aria-pressed="false">동북아</button></div>
       <div class="segmented" role="group" aria-label="카메라 시점"><button data-view="oblique" aria-pressed="true">3D</button><button data-view="top" aria-pressed="false">위에서</button><button data-view="side" aria-pressed="false">옆에서</button></div>
+      <div class="broadcast-settings-sections">
+        ${settingsSection('period-dialog','calendar','기간')}
+        ${settingsSection('display-dialog','sliders','표시 · 깊이 · 색상')}
+        ${settingsSection('catalog-dialog','list','지진 목록')}
+        ${settingsSection('broadcast-dialog','screen','자동 연출 · 방송 주소')}
+      </div>
       <div class="action-list">
-        <button id="broadcast-period-open">${icon('calendar')}기간${icon('chevron')}</button>
-        <button id="broadcast-display-open">${icon('sliders')}표시 · 깊이 · 색상${icon('chevron')}</button>
-        <button id="broadcast-list-open">${icon('list')}지진 목록${icon('chevron')}</button>
-        <button id="broadcast-edit">${icon('screen')}자동 연출 · 방송 주소${icon('chevron')}</button>
         <button id="broadcast-motion-toggle" class="quiet-button" hidden></button>
         <button id="broadcast-exit" class="quiet-button">일반 화면으로</button>
       </div>
