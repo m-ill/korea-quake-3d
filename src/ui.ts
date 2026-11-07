@@ -62,7 +62,7 @@ export function layout(catalog:Catalog) {
       <div class="timeline-top"><span>시간 탐색</span><div><strong id="timeline-date"></strong><span>까지</span><button id="timeline-end" class="quiet-button" title="선택 기간 끝으로">전체 보기</button></div></div>
       <div class="timeline-track"><button id="play" class="tool play-button" aria-label="시간 재생" title="30일 간격으로 재생" aria-pressed="false">${icon('play')}</button><div class="timeline-chart"><div id="histogram" aria-hidden="true"></div><input type="range" id="timeline-slider" min="0" max="100" value="100" aria-label="누적 표시 종료 날짜"><div id="year-labels" class="year-labels"></div></div></div>
     </section>
-    <footer class="app-footer"><span class="app-copyright">© 단국대학교 건축공학과</span><span id="snapshot"></span><span class="footer-method">과거 관측 자료</span><button id="source-open">데이터 안내</button><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer" class="map-credit">지도 · Natural Earth</a></footer>
+    <footer class="app-footer"><span class="app-copyright">© 단국대학교 건축공학과</span><span id="snapshot"></span><span class="footer-method">과거 관측 자료</span><button id="source-open">데이터 안내</button><a href="./guide/">자료 출처와 해석</a><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer" class="map-credit">지도 · Natural Earth</a></footer>
   </main>
   ${dialog('period-dialog','발생 기간',`
     <p class="sheet-intro">어느 시기의 지진을 살펴볼까요?</p>
