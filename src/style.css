@@ -280,3 +280,55 @@ select{min-height:44px;border:0;background:var(--surface);color:var(--ink);paddi
   .broadcast-mode #broadcast-settings{max-height:min(40dvh,360px);flex-shrink:0;padding:8px 0 12px;border-left:0;border-bottom:1px solid #d9e0e9}
   .broadcast-mode .broadcast-footer{justify-content:flex-start}
 }
+
+/* Map-first layout: controls take space only while the inline panel is open. */
+:root:not(.broadcast-mode) body{height:100dvh;overflow:hidden}
+:root:not(.broadcast-mode) .app-header{height:60px;min-height:60px;max-width:none;padding:6px 20px}
+:root:not(.broadcast-mode) .workspace{height:calc(100dvh - 60px);max-width:none;width:100%;padding:0 16px;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:44px minmax(0,1fr) 44px 28px;column-gap:16px}
+:root:not(.broadcast-mode) .overview{grid-column:1;grid-row:1;display:flex;align-items:center;justify-content:space-between;padding:0;text-align:left;gap:12px;min-width:0}
+.overview #region-heading{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);margin:0}
+:root:not(.broadcast-mode) .period-summary{margin:0;min-width:0;font-size:11px}
+:root:not(.broadcast-mode) .stage{grid-column:1;grid-row:2;height:auto;min-height:0;margin:0}
+:root:not(.broadcast-mode) .map-toolbar{grid-column:1;grid-row:3;max-width:none;width:100%;margin:0}
+:root:not(.broadcast-mode) .app-footer{display:none}
+:root:not(.broadcast-mode) .broadcast-footer{display:flex;grid-column:1/-1;grid-row:4;justify-content:flex-end;align-items:center;gap:12px;font-size:10px;color:var(--muted);min-width:0}
+:root:not(.broadcast-mode).broadcast-settings-open .workspace{grid-template-columns:minmax(0,1fr) 320px}
+:root:not(.broadcast-mode) #broadcast-settings{display:flex;grid-column:2;grid-row:1/4;min-height:0;overflow:auto;flex-direction:column;gap:10px;padding:0 10px 12px 16px;border-left:1px solid var(--line)}
+:root:not(.broadcast-mode) #broadcast-settings>.segmented,:root:not(.broadcast-mode) #broadcast-motion-status,:root:not(.broadcast-mode) #broadcast-settings>.action-list{display:none}
+#settings-toggle[aria-expanded="true"]{background:var(--selected);color:var(--accent)}
+#broadcast-settings .reading{display:block;max-width:none;min-height:0;margin:0;padding:12px 8px}
+#broadcast-settings .reading-number{font-size:25px;letter-spacing:-.5px;margin-top:3px}
+#broadcast-settings .reading-meta{font-size:11px;margin-top:4px}
+#broadcast-settings .mascot-status{display:none}
+#broadcast-settings .timeline{margin:0;padding:10px 8px 18px}
+#broadcast-settings .timeline-top{flex-wrap:wrap;gap:6px}
+#broadcast-settings .detail-magnitude{font-size:42px}
+#broadcast-settings .event-detail h3{font-size:16px}
+#broadcast-settings .detail-actions{flex-wrap:wrap}
+:root:not(.broadcast-mode) #broadcast-selection{display:block;position:absolute;bottom:8px;left:8px;max-width:calc(100% - 16px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:44px;padding:8px 12px;background:color-mix(in srgb,var(--bg) 94%,transparent);border-radius:8px;font-size:12px;text-align:left;color:var(--accent)}
+.broadcast-mode #broadcast-selection{pointer-events:auto;text-align:left}
+.broadcast-mode .workspace{grid-template-rows:52px minmax(0,1fr) auto;padding:12px 20px 8px;column-gap:16px}
+.broadcast-kicker{display:none}
+.broadcast-header h1{font-size:23px;letter-spacing:-.5px}
+.broadcast-brand{font-size:14px}.broadcast-brand img{width:32px;height:32px}.broadcast-brand small{display:none}
+.broadcast-mode #broadcast-settings .reading,.broadcast-mode #broadcast-settings .timeline{display:block!important}
+@media(max-width:720px){
+ :root:not(.broadcast-mode) .app-header{padding:4px 12px;height:56px;min-height:56px}
+ .header-tools #period-open,.header-tools #display-open,.header-tools #list-open,.header-tools #broadcast-open,.header-tools #more-open{display:none}
+ .header-tools #settings-toggle{width:auto;padding:0 10px}.header-tools #settings-toggle>span{display:inline}
+ :root:not(.broadcast-mode) .workspace{height:calc(100dvh - 56px);padding:0 8px;grid-template-rows:44px minmax(0,1fr) 44px 38px;gap:0}
+ :root:not(.broadcast-mode) .overview{gap:0}.region-switch{gap:0}
+ :root:not(.broadcast-mode) .period-summary{font-size:9px;padding:0 2px}
+ :root:not(.broadcast-mode).broadcast-settings-open .workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:44px minmax(150px,1fr) 44px minmax(0,35dvh) 38px}
+ :root:not(.broadcast-mode) #broadcast-settings{grid-column:1;grid-row:4;padding:4px 8px;border-left:0;border-top:1px solid var(--line)}
+ :root:not(.broadcast-mode).broadcast-settings-open .broadcast-footer{grid-row:5}
+ :root:not(.broadcast-mode) .broadcast-footer{font-size:9px;justify-content:center;gap:2px 8px;flex-wrap:wrap}
+ .broadcast-mode body{height:100dvh;overflow:hidden}
+ .broadcast-mode .workspace{display:grid;height:100dvh;min-height:0;padding:8px;grid-template-rows:48px minmax(0,1fr) 38px;grid-template-columns:minmax(0,1fr)}
+ .broadcast-mode .stage{height:auto;min-height:0;margin:0}
+ .broadcast-mode.broadcast-settings-open .workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:48px minmax(150px,1fr) minmax(0,35dvh) 38px}
+ .broadcast-mode #broadcast-settings{grid-column:1;grid-row:3;max-height:none}
+ .broadcast-mode.broadcast-settings-open .broadcast-footer{grid-row:4}
+ .broadcast-header h1{font-size:18px}.broadcast-brand>span{display:none}
+ .broadcast-mode .broadcast-footer{font-size:9px;gap:2px 8px;padding-top:4px}
+}

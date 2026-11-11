@@ -52,15 +52,27 @@ async function boot() {
     $('#map-canvas').innerHTML = '<div class="webgl-error"><h2>3D 지도를 시작하지 못했어요</h2><p>브라우저의 하드웨어 가속과 WebGL 지원을 확인해주세요.<br>목록과 CSV 저장은 계속 사용할 수 있습니다.</p></div>';console.error(error);
   }
   if(scene)scene.onManualControl=()=>{if(broadcast.enabled&&(broadcast.tour||broadcast.rotate))pauseBroadcastMotion(true);};
+  document.querySelectorAll<HTMLElement>('[data-settings-sheet]').forEach(section=>section.append($(`#${section.dataset.settingsSheet}-body`)));
+  $('#explore-summary').append($('.reading'),$('.timeline'));
   bind(); applyTheme(); syncControls(); resetTimeline(); refresh();
   if (sharedEvent) { const e=visible.find(q=>q.id===sharedEvent); if(e)selectEvent(e); }
   if(broadcast.enabled)setBroadcastMode(true,false);
 }
 function openSheet(id:string) {
+  const section=document.querySelector<HTMLDetailsElement>(`[data-settings-sheet="${id}"]`);
+  if(section){
+    setBroadcastSettings(true);section.open=true;
+    section.scrollIntoView({block:'nearest'});
+    section.querySelector<HTMLElement>('summary')?.focus({preventScroll:true});return;
+  }
   document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d=>d.close());
   const d=$<HTMLDialogElement>(`#${id}`);d.showModal();d.scrollTop=0;
 }
-function closeSheet(id:string) { $<HTMLDialogElement>(`#${id}`).close(); }
+function closeSheet(id:string) {
+  const section=document.querySelector<HTMLDetailsElement>(`[data-settings-sheet="${id}"]`);
+  if(section){section.open=false;return;}
+  $<HTMLDialogElement>(`#${id}`).close();
+}
 function applyTheme() {
   const effectiveDark=dark&&!broadcast.enabled;
   document.documentElement.dataset.theme=effectiveDark?'dark':'light';
@@ -150,7 +162,7 @@ function renderBroadcast() {
   $('#broadcast-heading').textContent=broadcast.title||`${REGIONS[filters.region].name} 진원 분포`;
   $('#broadcast-preview').textContent=broadcast.enabled?'방송 설정 적용':'미리보기';
   const selection=$('#broadcast-selection');
-  selection.hidden=!broadcast.enabled||!selected;
+  selection.hidden=!selected;
   selection.textContent=selected
     ? `M ${selected.mag.toFixed(1)} · ${selected.place} · 깊이 ${selected.depth===null?'미상':selected.depth.toFixed(1)+' km'} · ${timeLabel(selected.time)} KST`
     : '';
@@ -164,10 +176,12 @@ function renderBroadcast() {
 }
 function setBroadcastSettings(open:boolean) {
   const panel=$('#broadcast-settings');
-  const toggle=$('#broadcast-settings-toggle');
+  const toggle=$(broadcast.enabled?'#broadcast-settings-toggle':'#settings-toggle');
   if(!open&&panel.contains(document.activeElement))toggle.focus();
   panel.hidden=!open;
   toggle.setAttribute('aria-expanded',String(open));
+  $('#settings-toggle').setAttribute('aria-expanded',String(open));
+  $('#broadcast-settings-toggle').setAttribute('aria-expanded',String(open));
   document.documentElement.classList.toggle('broadcast-settings-open',open);
 }
 function startBroadcastTour() {
@@ -193,10 +207,10 @@ function setBroadcastMode(enabled:boolean,updateURL=true) {
   broadcast.enabled=enabled;
   document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d=>d.close());
   if(!applyingInPanel)setBroadcastSettings(false);
-  // Keep one set of controls and listeners for both the dialogs and the inline panel.
+  // Keep the same inline controls and listeners when switching presentation modes.
   document.querySelectorAll<HTMLElement>('[data-settings-sheet]').forEach(section=>{
     const id=section.dataset.settingsSheet!;
-    const destination=enabled?section:$(`#${id}`);
+    const destination=section;
     const body=$(`#${id}-body`);
     if(body.parentElement!==destination)destination.append(body);
   });
@@ -301,6 +315,8 @@ function bind() {
   for(const id of ['broadcast-title','broadcast-view','broadcast-motion','broadcast-interval','broadcast-speed'])$(`#${id}`).addEventListener('input',()=>renderBroadcast());
   $('#broadcast-preview').onclick=()=>setBroadcastMode(true);
   $('#broadcast-settings-toggle').onclick=()=>setBroadcastSettings($('#broadcast-settings').hidden);
+  $('#settings-toggle').onclick=()=>setBroadcastSettings($('#broadcast-settings').hidden);
+  $('#broadcast-selection').onclick=()=>{if(selected){renderDetail();openSheet('detail-dialog');}};
   $('#broadcast-settings-close').onclick=()=>setBroadcastSettings(false);
   $('#broadcast-motion-toggle').onclick=()=>pauseBroadcastMotion(!motionPaused);
   $('#broadcast-exit').onclick=()=>setBroadcastMode(false);
@@ -309,7 +325,7 @@ function bind() {
     const target=e.target as Element|null;
     if(e.repeat||e.ctrlKey||e.metaKey||e.altKey||target?.closest('input,textarea,select,[contenteditable="true"]')||document.querySelector('dialog[open]'))return;
     if(e.key.toLowerCase()==='b'){e.preventDefault();setBroadcastMode(!broadcast.enabled);}
-    else if(e.key==='Escape'&&broadcast.enabled){
+    else if(e.key==='Escape'&&(broadcast.enabled||!$('#broadcast-settings').hidden)){
       e.preventDefault();
       if($('#broadcast-settings').hidden)setBroadcastMode(false);
       else setBroadcastSettings(false);

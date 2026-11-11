@@ -11,6 +11,7 @@ export function layout(catalog:Catalog) {
   <header class="app-header">
     <a class="brand" href="${import.meta.env.BASE_URL}" aria-label="진원 지도 홈"><img src="${import.meta.env.BASE_URL}mascot/brand.png" alt="" width="40" height="40"><span>진원 지도<small>Korea Quake 3D</small></span></a>
     <nav class="header-tools" aria-label="탐색 도구">
+      <button class="tool" id="settings-toggle" aria-expanded="false" aria-controls="broadcast-settings">${icon('sliders')}<span>설정</span></button>
       ${tool('period-open','calendar','기간')}${tool('display-open','sliders','표시')}${tool('list-open','list','목록')}${tool('broadcast-open','screen','방송')}
       <button class="tool icon-only" id="theme-toggle" aria-label="다크 모드" aria-pressed="false" title="다크 모드">${icon('moon')}</button>
       <button class="tool icon-only" id="more-open" aria-label="더 보기" title="더 보기">${icon('more')}</button>
@@ -27,6 +28,10 @@ export function layout(catalog:Catalog) {
         ${settingsSection('display-dialog','sliders','표시 · 깊이 · 색상')}
         ${settingsSection('catalog-dialog','list','지진 목록')}
         ${settingsSection('broadcast-dialog','screen','자동 연출 · 방송 주소')}
+        ${settingsSection('detail-dialog','focus','선택한 지진')}
+        <details name="broadcast-settings-group" id="explore-summary"><summary>${icon('list')}<span>통계 · 시간 탐색</span>${icon('chevron')}</summary></details>
+        ${settingsSection('sources-dialog','info','자료 출처와 해석')}
+        ${settingsSection('more-dialog','more','공유 · 저장')}
       </div>
       <p id="broadcast-motion-status" class="hint"></p>
       <div class="action-list">
@@ -42,7 +47,7 @@ export function layout(catalog:Catalog) {
     <section class="stage" aria-label="3D 진원 지도">
       <div id="map-canvas"></div>
       <div class="map-compass" aria-hidden="true"><span>N</span><div>↑</div></div>
-      <div id="broadcast-selection" hidden></div>
+      <button id="broadcast-selection" aria-label="선택한 지진 상세 보기" hidden></button>
       <div id="empty-state" hidden><h2>표시할 지진이 없어요</h2><p>기간이나 표시 조건을 조금 넓혀보세요.</p><button id="empty-reset">조건 초기화</button></div>
     </section>
     <footer class="broadcast-footer">
@@ -101,7 +106,7 @@ export function layout(catalog:Catalog) {
     <section class="sheet-section"><h3>OBS 브라우저 소스에 사용</h3><p>아래 주소를 브라우저 소스 URL에 넣고 너비 1920, 높이 1080으로 설정하세요. 복사한 주소로 열면 설정 버튼이 숨겨집니다.</p><label class="sr-only" for="broadcast-url">방송용 주소</label><textarea id="broadcast-url" readonly rows="3"></textarea><button id="broadcast-copy" class="quiet-button">방송용 주소 복사</button><p class="hint">방송 화면에서도 드래그·휠과 점 선택을 사용할 수 있습니다. B 또는 Esc 키로 일반 화면으로 돌아옵니다. 자료 기준일은 화면 하단에 표시합니다.</p></section>`)}
   ${dialog('sources-dialog','데이터와 조작 안내',`
     <section class="sheet-section first-section"><h3>지도를 움직이는 방법</h3><p>드래그로 회전하고, 스크롤·핀치로 확대합니다. 우클릭 드래그·두 손가락으로 이동합니다. 지도에 포커스를 두면 방향키로 회전하고 + / −로 확대할 수 있습니다.</p><p>점을 누르면 진원이 선택됩니다. 아래의 선택한 지진을 누르면 상세 정보가 열립니다. 시간축은 시작일부터 커서 날짜까지의 지진을 누적 표시합니다.</p></section>
-    <div id="source-content"></div>
+    <a class="text-link" href="./guide/">자료 출처와 해석 안내 ↗</a><div id="source-content"></div>
     <section class="sheet-section"><h3>표시를 읽는 방법</h3><p>점 크기는 규모의 시각적 척도이며 파열 범위나 에너지의 실제 비율이 아닙니다. 지표의 빈 원은 깊이 미상으로, 0 km 지진과 구분합니다. 음수 깊이는 원본 기준면 위로 표시합니다. 깊이 색상은 표시 창에서 켤 수 있습니다.</p><p>수평 좌표는 영역 중심 위도의 지역 등거리 원통 근사 투영이며 km 단위입니다. 깊이 배율 1×에서 수평·수직 단위 비율이 같습니다. 광역 투영 오차가 있으며 측량용 지도가 아닙니다. 지하 판·단층 모델은 포함하지 않았습니다.</p></section>
     <section class="sheet-section"><h3>자료의 범위</h3><p id="matching-note"></p><p>관측망·기간·수록 규모가 다른 두 기관을 함께 표시하므로 국가 간 점의 개수로 위험도를 비교할 수 없습니다. 최대진도는 기상청 값만 표시하며 일본의 진도와 혼합하지 않습니다. 자동으로 연결한 사건은 원문으로 확인하세요.</p><p>이 지도는 과거 관측 자료를 탐색합니다. 실시간 경보·예측 서비스가 아닙니다.</p></section>
     <p class="hint"><a href="https://www.naturalearthdata.com/about/terms-of-use/" target="_blank" rel="noopener noreferrer">지도 · Natural Earth · public domain ↗</a></p>`)}
