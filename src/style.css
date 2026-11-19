@@ -1,6 +1,6 @@
 :root {
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif;
-  color:#202124;background:#fcfcfd;font-synthesis:none;font-size:14px;
+  color:var(--ink);background:var(--bg);font-synthesis:none;font-size:14px;
   --bg:#fcfcfd;--ink:#202124;--secondary:#6b6f76;--muted:#8d929a;--line:#e9eaed;
   --surface:#f1f2f5;--selected:#eaf1fe;--accent:#246ee9;--accent-ink:#1458cb;--sheet:#fff;
   --error:#c83f37;--backdrop:#262c3b42;--focus:#246ee9;
@@ -8,7 +8,7 @@
   color-scheme:light;
 }
 :root[data-theme="dark"] {
-  color-scheme:dark;--bg:#151619;--ink:#ededef;--secondary:#a1a4ac;--muted:#767d88;
+  color-scheme:dark;--bg:#152a34;--ink:#ededef;--secondary:#a1a4ac;--muted:#767d88;
   --line:#2b2e34;--surface:#23262d;--selected:#20324c;--accent:#78aaff;--accent-ink:#9bc0ff;
   --sheet:#1c1e23;--error:#ff9288;--backdrop:#0009;--focus:#78aaff;background:var(--bg);color:var(--ink);
 }
@@ -222,8 +222,8 @@ select{min-height:44px;border:0;background:var(--surface);color:var(--ink);paddi
 .broadcast-title-field input{width:100%;min-height:48px;border:0;border-radius:8px;padding:10px 12px;background:var(--surface);color:var(--ink);font-size:13px}
 .broadcast-setup-actions{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:22px}
 #broadcast-url{resize:vertical;width:100%;min-height:80px;margin-top:15px;border:0;border-radius:8px;background:var(--surface);color:var(--secondary);padding:12px;font-size:11px;line-height:1.7;overflow-wrap:anywhere}
-.broadcast-mode{--bg:#fff;--ink:#1c2b40;--secondary:#506077;--muted:#6d7b8e;background:#fff;color-scheme:light}
-.broadcast-mode body{height:100dvh;overflow:hidden;background:#fff}
+.broadcast-mode{--ink:#1c2b40;--secondary:#506077;--muted:#6d7b8e;background:var(--bg);color-scheme:light}
+.broadcast-mode body{height:100dvh;overflow:hidden;background:var(--bg)}
 .broadcast-mode .app-header,.broadcast-mode .overview,.broadcast-mode .map-toolbar,.broadcast-mode .reading,.broadcast-mode .timeline,.broadcast-mode .app-footer,.broadcast-mode #toast{display:none!important}
 .broadcast-mode .workspace{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:clamp(80px,10vh,120px) minmax(0,1fr) auto;width:100%;max-width:none;height:100dvh;margin:0;padding:clamp(24px,3.6vh,48px) clamp(32px,3.4vw,72px) clamp(10px,1.4vh,16px);gap:0 clamp(30px,3vw,64px)}
 .broadcast-mode .broadcast-header{display:flex;grid-column:1/-1;grid-row:1;align-items:flex-start;justify-content:space-between;gap:36px;min-width:0}
@@ -335,11 +335,10 @@ select{min-height:44px;border:0;background:var(--surface);color:var(--ink);paddi
 
 /* The atlas uses the same sea, paper, and section colours as the map graphics. */
 :root:not([data-theme="dark"]),:root.broadcast-mode{
-  --bg:#fafaf5;--ink:#102d48;--secondary:#496670;--muted:#576f75;
+  --bg:#edf5f3;--ink:#102d48;--secondary:#496670;--muted:#576f75;
   --surface:#e6efeb;--line:#d0dfda;--selected:#d8ebf1;--accent:#095db6;--accent-ink:#084e91;--sheet:#fffff9
 }
-.stage{overflow:hidden;background:#edf5f3;border-radius:12px}
-[data-theme="dark"] .stage{background:#152a34}
+.stage{overflow:hidden;background:var(--bg);border-radius:12px}
 .atlas-caption{position:absolute;top:clamp(12px,2.5vw,32px);left:clamp(12px,2.5vw,32px);display:grid;gap:.32rem;max-width:75%;pointer-events:none;color:var(--ink);text-shadow:0 0 8px var(--bg),0 1px 3px var(--bg)}
 .atlas-caption small{font-size:clamp(.85rem,1.25vw,1.05rem);font-weight:700;color:var(--accent-ink)}
 .atlas-caption strong{font-size:clamp(1.2rem,2.6vw,2.5rem);line-height:1.18;letter-spacing:-.045em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}

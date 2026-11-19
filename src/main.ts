@@ -82,7 +82,7 @@ function closeSheet(id:string) {
 function applyTheme() {
   const effectiveDark=dark&&!broadcast.enabled;
   document.documentElement.dataset.theme=effectiveDark?'dark':'light';
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content',effectiveDark?'#151619':broadcast.enabled?'#ffffff':'#fcfcfd');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content',getComputedStyle(document.documentElement).getPropertyValue('--bg').trim());
   const b=$('#theme-toggle');b.innerHTML=icon(dark?'sun':'moon');b.setAttribute('aria-pressed',String(dark));b.setAttribute('aria-label','다크 모드');b.setAttribute('aria-description',dark?'현재 다크 모드입니다. 누르면 라이트 모드로 전환합니다.':'현재 라이트 모드입니다. 누르면 다크 모드로 전환합니다.');b.title=dark?'라이트 모드로 전환':'다크 모드로 전환';
   scene?.setAppearance(effectiveDark,depthColors,broadcast.enabled);if(sectionOpen)renderAtlas();
 }
