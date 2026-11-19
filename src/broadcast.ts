@@ -1,15 +1,15 @@
 import type { Filters } from './model';
 
-export type CameraView = 'oblique'|'top'|'side';
+export type CameraView = 'oblique'|'top'|'side'|'section';
 export interface BroadcastOptions { enabled:boolean; title:string; view:CameraView; rotate:boolean; tour:boolean; interval:number; speed:number }
 export function readBroadcast(search:string):BroadcastOptions {
   const p=new URLSearchParams(search), view=p.get('view');
   return {
     enabled:p.get('broadcast')==='1',
     title:Array.from((p.get('title')??'').replace(/[\u0000-\u001f\u007f]/g,' ').trim()).slice(0,60).join(''),
-    view:view==='top'||view==='side'?view:'oblique',
-    rotate:p.get('rotate')==='1'&&p.get('tour')!=='1',
-    tour:p.get('tour')==='1',
+    view:view==='top'||view==='side'||view==='section'?view:'oblique',
+    rotate:view!=='section'&&p.get('rotate')==='1'&&p.get('tour')!=='1',
+    tour:view!=='section'&&p.get('tour')==='1',
     interval:[12,20,30].includes(Number(p.get('interval')))?Number(p.get('interval')):20,
     speed:[.4,.8,1.6].includes(Number(p.get('speed')))?Number(p.get('speed')):.4,
   };

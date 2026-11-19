@@ -1,3 +1,4 @@
+import { drawSection } from './section';
 import './style.css';
 import { csv, depthColor, filterEvents, kstDate, readState, REGIONS, validDate, type Catalog, type Filters, type Quake, type Region } from './model';
 import { QuakeScene, type MapData } from './scene';
@@ -17,6 +18,8 @@ document.documentElement.dataset.theme = dark && !broadcast.enabled ? 'dark' : '
 app.innerHTML = `<div class="loading"><img src="${base}mascot/brand.png" alt="" width="64" height="64"><h1>진원 지도</h1><p>과거의 지진 기록을 불러오고 있어요.</p></div>`;
 let catalog:Catalog, scene:QuakeScene|undefined, filters:Filters;
 let selected:Quake|null = null, visible:Quake[] = [], scale = 4;
+let geography:MapData;
+let sectionOpen=false;
 let rotating = false, playing = false, depthColors = true;
 let tourHero:Quake|null|undefined, motionPaused=false, motionLabel='전체 분포';
 let cursor = 1, totalDays = 1, listSort = 'latest', listQuery = '', listLimit = 40;
@@ -29,7 +32,7 @@ async function boot() {
   const [c, map] = await Promise.all(['catalog.json','map.json'].map(async file => {
     const r = await fetch(`${base}data/${file}`);if (!r.ok) throw new Error(`${file} HTTP ${r.status}`);return r.json();
   }));
-  catalog = c as Catalog;
+  catalog = c as Catalog; geography=map as MapData;
   if (catalog.schemaVersion !== 1 || !catalog.events?.length || !Array.isArray(map.polygons)) throw new Error('데이터 형식이 올바르지 않습니다.');
   const {event:sharedEvent, scale:sharedScale, ...sharedFilters} = readState(location.search,catalog.snapshotEnd);
   const region = sharedFilters.region ?? 'korea';
@@ -57,6 +60,9 @@ async function boot() {
   bind(); applyTheme(); syncControls(); resetTimeline(); refresh();
   if (sharedEvent) { const e=visible.find(q=>q.id===sharedEvent); if(e)selectEvent(e); }
   if(broadcast.enabled)setBroadcastMode(true,false);
+  else if(new URLSearchParams(location.search).get('section')==='1' && visible.length)openSection();
+  else setView('top');
+  new ResizeObserver(()=>{if(sectionOpen)renderAtlas();}).observe($('.stage'));
 }
 function openSheet(id:string) {
   const section=document.querySelector<HTMLDetailsElement>(`[data-settings-sheet="${id}"]`);
@@ -78,7 +84,7 @@ function applyTheme() {
   document.documentElement.dataset.theme=effectiveDark?'dark':'light';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',effectiveDark?'#151619':broadcast.enabled?'#ffffff':'#fcfcfd');
   const b=$('#theme-toggle');b.innerHTML=icon(dark?'sun':'moon');b.setAttribute('aria-pressed',String(dark));b.setAttribute('aria-label','다크 모드');b.setAttribute('aria-description',dark?'현재 다크 모드입니다. 누르면 라이트 모드로 전환합니다.':'현재 라이트 모드입니다. 누르면 다크 모드로 전환합니다.');b.title=dark?'라이트 모드로 전환':'다크 모드로 전환';
-  scene?.setAppearance(effectiveDark,depthColors,broadcast.enabled);
+  scene?.setAppearance(effectiveDark,depthColors,broadcast.enabled);if(sectionOpen)renderAtlas();
 }
 function syncControls() {
   for(const key of ['from','to'] as const)$<HTMLInputElement>(`#${key}`).value=filters[key];
@@ -109,10 +115,11 @@ function refresh() {
     tourHero=null;
     scene?.stopTour();
   }
-  scene?.updateEvents(visible,scale);
+  scene?.updateEvents(visible,scale);scene?.select(selected);
+  if(sectionOpen&&!selected)setView('top');
   if(refreshTour&&!motionPaused&&!reducedMotion.matches)startBroadcastTour();
   $('#mag-value').textContent=filters.minMag.toFixed(1);$('#depth-value').textContent=String(filters.maxDepth);
-  $('#scale-badge').textContent=scale===1?'깊이 1× · 실제 비율':`깊이 ${scale}×`;
+  $('#scale-badge').textContent=scale===1?'실제 1×':`세로 ${scale}×`;
   $('#period-label').textContent=`${filters.from.replaceAll('-','.')} — ${filters.to.replaceAll('-','.')} · M${filters.minMag.toFixed(1)}+`;
   $('#region-heading').textContent=REGIONS[filters.region].name;$('#timeline-date').textContent=effectiveTo().replaceAll('-','.');
   $<HTMLInputElement>('#timeline-slider').setAttribute('aria-valuetext',`${effectiveTo()}까지 누적 표시`);
@@ -125,7 +132,7 @@ function renderReading() {
   if(selected) {
     const e=selected;
     root.innerHTML=`<div class="reading-label">선택한 진원 <button id="deselect" class="tool icon-only small-close" aria-label="선택 해제" title="선택 해제">${icon('close')}</button></div><button id="selected-detail" class="selected-reading" aria-label="선택한 지진 상세 보기"><span class="reading-number"><small>M</small>${e.mag.toFixed(1)}</span><span class="selected-place">${esc(e.place)}${icon('chevron')}</span><span class="reading-meta">${kstDate(e.time).replaceAll('-','.')} · 깊이 ${e.depth===null?'미상':`${e.depth.toFixed(1)} km`}</span></button>`;
-    $('#deselect').onclick=()=>{selected=null;scene?.select(null);renderReading();renderList();updateBear();renderBroadcast();};
+    $('#deselect').onclick=()=>{selected=null;scene?.select(null);if(sectionOpen)setView('top');renderReading();renderList();updateBear();renderBroadcast();};
     $('#selected-detail').onclick=()=>{renderDetail();openSheet('detail-dialog');};
   } else {
     const known=visible.filter(e=>e.depth!==null).length, max=visible.length?Math.max(...visible.map(e=>e.mag)):null;
@@ -140,7 +147,7 @@ function updateBear() {
 function renderDetail() {
   if(!selected){$('#event-detail').innerHTML='';return;}const e=selected;
   $('#event-detail').innerHTML=`<article class="event-detail"><div class="detail-magnitude"><small>M</small>${e.mag.toFixed(1)}<span>${esc(e.magType)}</span></div><h3>${esc(e.place)}</h3><p class="detail-time">${timeLabel(e.time)} KST</p><dl class="detail-measures"><div><dt>진원 깊이</dt><dd>${e.depth===null?'미상':`${e.depth.toFixed(1)} <small>km</small>`}</dd></div><div><dt>최대진도 · 기상청</dt><dd>${esc(e.intensity??'—')}</dd></div><div><dt>위도</dt><dd>${e.lat.toFixed(3)}° N</dd></div><div><dt>경도</dt><dd>${e.lon.toFixed(3)}° E</dd></div></dl>${e.depth===null?'<p class="hint">깊이 자료가 없어 지표의 빈 원으로 표시합니다.</p>':''}${e.alternate?.length?`<details class="alternate"><summary>다른 기관의 연결 기록 (${e.alternate.length})</summary>${e.alternate.map(a=>`<p>${esc(a.source)} ${esc(a.magType)} ${a.mag.toFixed(1)} · 깊이 ${a.depth===null?'미상':a.depth+' km'}<br><a class="text-link" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">원본 확인 ↗</a></p>`).join('')}<p class="hint">기관별 추정치를 그대로 보존하며 표시값을 대체하지 않습니다.</p></details>`:''}<div class="detail-actions"><button id="focus-event" class="primary-button">${icon('focus')}지도에서 확대</button><a class="text-link" href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${e.source} 원본 ↗</a></div></article>`;
-  $('#focus-event').onclick=()=>{closeSheet('detail-dialog');scene?.focus(e);$('.stage').scrollIntoView({behavior:reducedMotion.matches?'instant':'smooth',block:'center'});};
+  $('#focus-event').onclick=()=>{closeSheet('detail-dialog');setView('oblique');scene?.focus(e);$('.stage').scrollIntoView({behavior:reducedMotion.matches?'instant':'smooth',block:'center'});};
 }
 function selectEvent(e:Quake) {
   if(broadcast.enabled&&broadcast.tour){
@@ -160,7 +167,11 @@ function currentBroadcastURL(clean=false) {
 }
 function renderBroadcast() {
   $('#broadcast-heading').textContent=broadcast.title||`${REGIONS[filters.region].name} 진원 분포`;
+  const motionSelect=$<HTMLSelectElement>('#broadcast-motion');
+  motionSelect.disabled=$<HTMLSelectElement>('#broadcast-view').value==='section';
+  if(motionSelect.disabled)motionSelect.value='still';
   $('#broadcast-preview').textContent=broadcast.enabled?'방송 설정 적용':'미리보기';
+  renderAtlas();
   const selection=$('#broadcast-selection');
   selection.hidden=!selected;
   selection.textContent=selected
@@ -232,6 +243,7 @@ function setBroadcastMode(enabled:boolean,updateURL=true) {
 }
 function pauseBroadcastMotion(paused:boolean){
   if(!paused&&!reducedMotion.matches&&broadcast.tour&&!scene?.hasTour)startBroadcastTour();
+  if(!paused && sectionOpen)setView('oblique');
   motionPaused=paused;scene?.pauseTour(paused||reducedMotion.matches);
   rotating=broadcast.enabled&&broadcast.rotate&&!broadcast.tour&&!paused&&!reducedMotion.matches;
   scene?.setRotate(rotating,broadcast.speed);renderBroadcast();
@@ -250,7 +262,26 @@ function toast(message:string) { clearTimeout(toastTimer);$('#toast').textConten
 function download(content:Blob|string,name:string) {
   const url=typeof content==='string'?content:URL.createObjectURL(content), a=document.createElement('a');a.href=url;a.download=name;a.click();if(typeof content!=='string')setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
-function setView(view:'oblique'|'top'|'side') { scene?.setView(view);document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view))); }
+function renderAtlas() {
+  const canvas=$<HTMLCanvasElement>('#section-canvas');
+  const detail=sectionOpen && selected;
+  canvas.hidden=!detail;
+  $('#map-canvas').hidden=!!detail;
+  $('.stage').classList.toggle('in-section',!!detail);
+  $('#section-view').setAttribute('aria-pressed',String(!!detail));
+  $<HTMLButtonElement>('#section-view').disabled=!visible.length;
+  $('#atlas-kicker').textContent=selected ? kstDate(selected.time).replaceAll('-','.')+'   /   M '+selected.mag.toFixed(1) : '과거 지진 관측 자료';
+  $('#atlas-title').textContent=detail ? '진원을 지나는 동서 단면' : selected ? selected.place : REGIONS[filters.region].name+' 진원 지도';
+  if(detail)drawSection(canvas,geography,detail,scale,dark && !broadcast.enabled);
+}
+function openSection() {
+  const event=selected??visible.find(e=>e.id==='kma-2016-364')??visible.reduce<Quake|null>((a,b)=>!a||b.mag>a.mag?b:a,null);
+  if(!event)return;
+  rotating=false;scene?.setRotate(false);$('#rotate').setAttribute('aria-pressed','false');
+  sectionOpen=true;selectEvent(event);
+  document.querySelectorAll<HTMLElement>('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view==='section')));
+}
+function setView(view:CameraView) { if(view==='section'&&visible.length){openSection();return;} if(view==='section')view='top';sectionOpen=false;renderAtlas();scene?.setView(view);document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view))); }
 function reset() {
   filters={region:'korea',from:'2016-01-01',to:catalog.snapshotEnd,minMag:2,maxDepth:100,unknown:true,kma:true,usgs:true};
   scale=4;selected=null;depthColors=true;
@@ -262,7 +293,7 @@ function reset() {
 function changeRegion(region:Region) {
   if(broadcast.enabled&&(broadcast.tour||broadcast.rotate))pauseBroadcastMotion(true);
   pause();selected=null;filters.region=region;filters.maxDepth=REGIONS[region].depth;scale=REGIONS[region].scale;
-  scene?.setRegion(region);syncControls();histogram();refresh();setView('oblique');
+  scene?.setRegion(region);syncControls();histogram();refresh();setView('top');
 }
 function bind() {
   const openings:Record<string,string>={'period-open':'period-dialog','period-summary':'period-dialog','display-open':'display-dialog','list-open':'catalog-dialog','more-open':'more-dialog','source-open':'sources-dialog','more-source':'sources-dialog','broadcast-open':'broadcast-dialog','more-broadcast':'broadcast-dialog'};
@@ -289,13 +320,15 @@ function bind() {
     if(broadcast.enabled&&(broadcast.tour||broadcast.rotate))pauseBroadcastMotion(true);
     setView(b.dataset.view as CameraView);
   });
+  $('#section-view').onclick=()=>sectionOpen?setView('top'):openSection();
+  $('#scale-badge').onclick=()=>{scale=scale===1?4:1;syncControls();refresh();};
   $('#view-reset').onclick=()=>setView('oblique');
-  $('#rotate').onclick=()=>{if(reducedMotion.matches){toast('동작 줄이기 설정에 따라 수동 회전을 사용해주세요.');return;}rotating=!rotating;scene?.setRotate(rotating);$('#rotate').setAttribute('aria-pressed',String(rotating));};
+  $('#rotate').onclick=()=>{if(reducedMotion.matches){toast('동작 줄이기 설정에 따라 수동 회전을 사용해주세요.');return;}if(sectionOpen)setView('oblique');rotating=!rotating;scene?.setRotate(rotating);$('#rotate').setAttribute('aria-pressed',String(rotating));};
   reducedMotion.addEventListener('change',()=>{if(reducedMotion.matches){rotating=false;scene?.setRotate(false);scene?.pauseTour(true);motionPaused=true;$('#rotate').setAttribute('aria-pressed','false');}renderBroadcast();});
-  $('#screenshot').onclick=()=>{if(scene){download(scene.screenshot(),`korea-quake-${effectiveTo()}.png`);closeSheet('more-dialog');}else toast('3D 지도를 시작하지 못했습니다.');};
+  $('#screenshot').onclick=()=>{if(scene||sectionOpen){download(sectionOpen?$<HTMLCanvasElement>('#section-canvas').toDataURL('image/png'):scene!.screenshot(),`korea-quake-${effectiveTo()}.png`);closeSheet('more-dialog');}else toast('3D 지도를 시작하지 못했습니다.');};
   $('#export').onclick=()=>{download(new Blob([csv(visible)],{type:'text/csv;charset=utf-8'}),`korea-quakes-${filters.from}-${effectiveTo()}.csv`);closeSheet('more-dialog');toast(`${fmt(visible.length)}건을 CSV로 저장했습니다.`);};
   $('#share').onclick=async()=>{
-    const url=new URL(location.href);url.search='';for(const [k,v] of Object.entries(filters))url.searchParams.set(k,typeof v==='boolean'?(v?'1':'0'):String(v));url.searchParams.set('to',effectiveTo());url.searchParams.set('scale',String(scale));url.searchParams.set('colors',depthColors?'1':'0');if(selected)url.searchParams.set('event',selected.id);
+    const url=new URL(location.href);url.search='';for(const [k,v] of Object.entries(filters))url.searchParams.set(k,typeof v==='boolean'?(v?'1':'0'):String(v));url.searchParams.set('to',effectiveTo());url.searchParams.set('scale',String(scale));url.searchParams.set('colors',depthColors?'1':'0');if(sectionOpen)url.searchParams.set('section','1');if(selected)url.searchParams.set('event',selected.id);
     try{await navigator.clipboard.writeText(url.toString());history.replaceState(null,'',url);toast('현재 조건과 선택한 지진의 링크를 복사했습니다.');}catch{history.replaceState(null,'',url);toast('주소창의 링크를 복사해 공유해주세요.');}closeSheet('more-dialog');
   };
   $('#event-list').onclick=e=>{const b=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-event]');const q=b?visible.find(q=>q.id===b.dataset.event):null;if(q)selectEvent(q);};

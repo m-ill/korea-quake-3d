@@ -22,7 +22,7 @@ export function layout(catalog:Catalog) {
     <aside id="broadcast-settings" aria-labelledby="broadcast-settings-title" hidden>
       <div class="broadcast-settings-heading"><h2 id="broadcast-settings-title">설정</h2><button id="broadcast-settings-close" class="tool icon-only" aria-label="설정 접기">${icon('close')}</button></div>
       <div class="segmented" role="group" aria-label="탐색 영역"><button data-region="korea" aria-pressed="true">한반도</button><button data-region="eastasia" aria-pressed="false">동북아</button></div>
-      <div class="segmented" role="group" aria-label="카메라 시점"><button data-view="oblique" aria-pressed="true">3D</button><button data-view="top" aria-pressed="false">위에서</button><button data-view="side" aria-pressed="false">옆에서</button></div>
+      <div class="segmented" role="group" aria-label="카메라 시점"><button data-view="oblique" aria-pressed="true">3D</button><button data-view="top" aria-pressed="false">위에서</button><button data-view="side" aria-pressed="false">옆에서</button><button data-view="section" aria-pressed="false">진원 단면</button></div>
       <div class="broadcast-settings-sections">
         ${settingsSection('period-dialog','calendar','기간')}
         ${settingsSection('display-dialog','sliders','표시 · 깊이 · 색상')}
@@ -46,6 +46,8 @@ export function layout(catalog:Catalog) {
     </section>
     <section class="stage" aria-label="3D 진원 지도">
       <div id="map-canvas"></div>
+      <canvas id="section-canvas" role="img" hidden></canvas>
+      <div class="atlas-caption"><small id="atlas-kicker"></small><strong id="atlas-title"></strong></div>
       <div class="map-compass" aria-hidden="true"><span>N</span><div>↑</div></div>
       <button id="broadcast-selection" aria-label="선택한 지진 상세 보기" hidden></button>
       <div id="empty-state" hidden><h2>표시할 지진이 없어요</h2><p>기간이나 표시 조건을 조금 넓혀보세요.</p><button id="empty-reset">조건 초기화</button></div>
@@ -56,8 +58,8 @@ export function layout(catalog:Catalog) {
       <span>© 단국대학교 AI 건축융합학과</span>
     </footer>
     <div class="map-toolbar">
-      <div class="segmented view-tools" role="group" aria-label="카메라 시점"><button data-view="oblique" aria-pressed="true">3D</button><button data-view="top" aria-pressed="false">위에서</button><button data-view="side" aria-pressed="false">옆에서</button></div>
-      <div class="view-actions"><span id="scale-badge" class="quiet-label"></span><button id="rotate" class="tool icon-only" title="자동 회전" aria-label="자동 회전" aria-pressed="false">${icon('orbit')}</button><button id="view-reset" class="tool icon-only" title="시점 초기화" aria-label="시점 초기화">${icon('reset')}</button></div>
+      <div class="segmented view-tools" role="group" aria-label="카메라 시점"><button data-view="oblique" aria-pressed="true">3D</button><button data-view="top" aria-pressed="false">위에서</button><button data-view="side" aria-pressed="false">옆에서</button><button id="section-view" aria-pressed="false">진원 단면</button></div>
+      <div class="view-actions"><button id="scale-badge" title="실제 비율과 세로 4배 전환"></button><button id="rotate" class="tool icon-only" title="자동 회전" aria-label="자동 회전" aria-pressed="false">${icon('orbit')}</button><button id="view-reset" class="tool icon-only" title="시점 초기화" aria-label="시점 초기화">${icon('reset')}</button></div>
     </div>
     <section class="reading" aria-label="현재 탐색 결과">
       <div class="current-reading" id="current-reading"></div>
@@ -96,7 +98,7 @@ export function layout(catalog:Catalog) {
   ${dialog('broadcast-dialog','방송 화면',`
     <p class="sheet-intro">밝은 배경에 지도와 핵심 정보만 표시합니다. 현재 기간·표시 조건·선택한 지진을 그대로 사용합니다.</p>
     <label class="broadcast-title-field" for="broadcast-title">화면 제목<input id="broadcast-title" type="text" maxlength="60" placeholder="영역에 맞는 제목을 자동으로 표시"></label>
-    <div class="setting-row"><label for="broadcast-view">시작 시점</label><select id="broadcast-view"><option value="oblique">3D · 기울여 보기</option><option value="top">위에서 보기</option><option value="side">옆에서 보기</option></select></div>
+    <div class="setting-row"><label for="broadcast-view">시작 시점</label><select id="broadcast-view"><option value="oblique">3D · 기울여 보기</option><option value="top">위에서 보기</option><option value="side">옆에서 보기</option><option value="section">진원 동서 단면</option></select></div>
     <div class="setting-row"><label for="broadcast-motion">자동 연출</label><select id="broadcast-motion"><option value="still">고정 화면</option><option value="orbit">계속 회전</option><option value="tour">장면 순환</option></select></div>
     <p class="hint">장면 순환: 전체 → 깊이 → 주요 지진 확대 → 위에서 보기. 선택한 지진을 강조하고, 선택이 없으면 현재 조건의 최대 규모 지진을 사용합니다.</p>
     <div class="setting-row"><label for="broadcast-interval">장면 간격</label><select id="broadcast-interval"><option value="12">12초 · 빠르게</option><option value="20">20초 · 기본</option><option value="30">30초 · 여유롭게</option></select></div>
@@ -107,7 +109,7 @@ export function layout(catalog:Catalog) {
   ${dialog('sources-dialog','데이터와 조작 안내',`
     <section class="sheet-section first-section"><h3>지도를 움직이는 방법</h3><p>드래그로 회전하고, 스크롤·핀치로 확대합니다. 우클릭 드래그·두 손가락으로 이동합니다. 지도에 포커스를 두면 방향키로 회전하고 + / −로 확대할 수 있습니다.</p><p>점을 누르면 진원이 선택됩니다. 아래의 선택한 지진을 누르면 상세 정보가 열립니다. 시간축은 시작일부터 커서 날짜까지의 지진을 누적 표시합니다.</p></section>
     <a class="text-link" href="./about/">지도 소개와 사용법 ↗</a><br><a class="text-link" href="./guide/">자료 출처와 해석 안내 ↗</a><div id="source-content"></div>
-    <section class="sheet-section"><h3>표시를 읽는 방법</h3><p>점 크기는 규모의 시각적 척도이며 파열 범위나 에너지의 실제 비율이 아닙니다. 지표의 빈 원은 깊이 미상으로, 0 km 지진과 구분합니다. 음수 깊이는 원본 기준면 위로 표시합니다. 깊이 색상은 표시 창에서 켤 수 있습니다.</p><p>수평 좌표는 영역 중심 위도의 지역 등거리 원통 근사 투영이며 km 단위입니다. 깊이 배율 1×에서 수평·수직 단위 비율이 같습니다. 광역 투영 오차가 있으며 측량용 지도가 아닙니다. 지하 판·단층 모델은 포함하지 않았습니다.</p></section>
+    <section class="sheet-section"><h3>표시를 읽는 방법</h3><p>점 크기는 규모의 시각적 척도이며 파열 범위나 에너지의 실제 비율이 아닙니다. 지표의 빈 원은 깊이 미상으로, 0 km 지진과 구분합니다. 음수 깊이는 원본 기준면 위로 표시합니다. 깊이 색상은 표시 창에서 켤 수 있습니다.</p><p>수평 좌표는 영역 중심 위도의 지역 등거리 원통 근사 투영이며 km 단위입니다. 깊이 배율 1×에서 수평·수직 단위 비율이 같습니다. 광역 투영 오차가 있으며 측량용 지도가 아닙니다. 진원 단면의 띠는 깊이 눈금입니다. 단면은 선택한 지진을 지나며, 위치와 관측 깊이를 같은 수직면에서 보여줍니다.</p></section>
     <section class="sheet-section"><h3>자료의 범위</h3><p id="matching-note"></p><p>관측망·기간·수록 규모가 다른 두 기관을 함께 표시하므로 국가 간 점의 개수로 위험도를 비교할 수 없습니다. 최대진도는 기상청 값만 표시하며 일본의 진도와 혼합하지 않습니다. 자동으로 연결한 사건은 원문으로 확인하세요.</p><p>이 지도는 과거 관측 자료를 탐색합니다. 실시간 경보·예측 서비스가 아닙니다.</p></section>
     <p class="hint"><a href="https://www.naturalearthdata.com/about/terms-of-use/" target="_blank" rel="noopener noreferrer">지도 · Natural Earth · public domain ↗</a></p>`)}
   <div id="toast" role="status" aria-live="polite"></div>`;

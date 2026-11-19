@@ -7,6 +7,7 @@ type Label = {sprite:THREE.Sprite; base:number; depth:boolean; city:boolean};
 export class QuakeScene {
   renderer:THREE.WebGLRenderer; camera:THREE.PerspectiveCamera; controls:OrbitControls;
   private scene=new THREE.Scene(); private mapGroup=new THREE.Group(); private pointsGroup=new THREE.Group();
+  private depthFrame=new THREE.Group();
   private focusGroup=new THREE.Group(); private labels:Label[]=[]; private known:Quake[]=[];private unknown:Quake[]=[];
   private mesh?:THREE.InstancedMesh; private rings?:THREE.InstancedMesh; private events:Quake[]=[];
   private region:Region='korea';private scale=4; private center:[number,number]=[127.25,37.5];private eventDepth=0;
@@ -31,11 +32,9 @@ export class QuakeScene {
     }
     return distance;
   }
-  private get palette(){return this.broadcast
-    ? {land:0x8a97a8,coast:0x4b6079,border:0x8a97a8,grid:0xb7c3d1,edge:0x8796a7,label:'#546477',city:'#33465d',point:'#41566f',ring:0x8795a5,selection:0x1767d1,background:0xffffff}
-    : this.dark
-    ? {land:0x8592a2,coast:0xa7b3c2,border:0x778597,grid:0x596574,edge:0x718091,label:'#7e8998',city:'#b0b9c6',point:'#bbc4d1',ring:0x83909f,selection:0x78aaff,background:0x151619}
-    : {land:0x9aa2aa,coast:0x606b77,border:0x939ba5,grid:0xc4c9d0,edge:0xa9b0ba,label:'#89919b',city:'#606973',point:'#687786',ring:0x9ba3ad,selection:0x246ee9,background:0xfcfcfd};}
+  private get palette(){return this.dark && !this.broadcast
+    ? {land:0x696e5e,sea:0x254654,coast:0x9bb2a5,border:0x88988c,grid:0x52727a,edge:0x597d84,label:'#a5bfbd',city:'#eff8f7',point:'#bdd6d4',ring:0x9aafba,selection:0xff917b,background:0x152a34}
+    : {land:0xfff7db,sea:0xc5e6ed,coast:0x507e83,border:0xa4a689,grid:0x97bfc4,edge:0x66979a,label:'#446974',city:'#254652',point:'#357887',ring:0x668187,selection:0xc4402a,background:0xedf5f3};}
   constructor(private host:HTMLElement,private map:MapData,private onSelect:(e:Quake)=>void) {
     this.renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
     this.renderer.setPixelRatio(Math.min(devicePixelRatio,2));this.renderer.setClearColor(this.palette.background,0);
@@ -97,14 +96,17 @@ export class QuakeScene {
     this.buildMap();this.updateEvents(this.events,this.scale);this.setView('oblique');
   }
   private buildMap(){
-    this.clear(this.mapGroup);this.labels=[];const b=REGIONS[this.region].bounds;
+    this.clear(this.mapGroup);this.depthFrame=new THREE.Group();this.mapGroup.add(this.depthFrame);this.labels=[];const b=REGIONS[this.region].bounds;
+    const sw=this.point(b[0],b[1]),ne=this.point(b[2],b[3]);
+    const ocean=new THREE.Mesh(new THREE.PlaneGeometry(ne.x-sw.x,sw.z-ne.z),new THREE.MeshBasicMaterial({color:this.palette.sea,side:THREE.DoubleSide,transparent:true,depthWrite:false}));
+    ocean.rotation.x=-Math.PI/2;ocean.position.copy(sw).add(ne).multiplyScalar(.5);ocean.renderOrder=-3;this.mapGroup.add(ocean);
     for(const polygon of this.map.polygons){
       const rings=polygon.map(r=>this.clip(r)).filter(r=>r.length>=3);if(!rings.length)continue;
       const convert=(r:number[][])=>r.map(c=>{const p=this.point(c[0],c[1]);return new THREE.Vector2(p.x,p.z);});
       const shape=new THREE.Shape(convert(rings[0]));rings.slice(1).forEach(r=>shape.holes.push(new THREE.Path(convert(r))));
       const g=new THREE.ShapeGeometry(shape);g.rotateX(Math.PI/2); // xy -> xz, with local z sign preserved
-      const mesh=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:this.palette.land,side:THREE.DoubleSide,transparent:true,opacity:this.dark?.1:.07,depthWrite:false}));mesh.renderOrder=0;this.mapGroup.add(mesh);
-      rings.forEach(r=>this.line([...r,r[0]],this.palette.coast,.5));
+      const mesh=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:this.palette.land,side:THREE.DoubleSide,transparent:true,opacity:.98,depthWrite:false}));mesh.renderOrder=-2;this.mapGroup.add(mesh);
+      rings.forEach(r=>this.line([...r,r[0]],this.palette.coast,.85));
     }
     for(const border of this.map.borders){let run:number[][]=[];for(const c of border){if(c[0]>=b[0]&&c[0]<=b[2]&&c[1]>=b[1]&&c[1]<=b[3])run.push(c);else{this.line(run,this.palette.border,.3);run=[];}}this.line(run,this.palette.border,.3);}
     for(let lon=Math.ceil(b[0]);lon<=b[2];lon+=(this.region==='korea'?2:5)){
@@ -117,11 +119,11 @@ export class QuakeScene {
     const max=this.region==='korea'?100:700;const step=this.region==='korea'?20:100;
     for(let d=step;d<=max;d+=step){
       const corners=[[b[0],b[1]],[b[2],b[1]],[b[2],b[3]],[b[0],b[3]],[b[0],b[1]]].map(c=>this.point(c[0],c[1],d));
-      const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(corners),new THREE.LineBasicMaterial({color:this.palette.grid,transparent:true,opacity:.24,depthWrite:false}));this.mapGroup.add(line);
+      const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(corners),new THREE.LineBasicMaterial({color:this.palette.grid,transparent:true,opacity:.24,depthWrite:false}));this.depthFrame.add(line);
       this.label(`${d} km`,this.point(b[2]+.25,b[1],d),this.palette.label,12,true);
     }
     for(const [lon,lat] of [[b[0],b[1]],[b[2],b[1]],[b[2],b[3]],[b[0],b[3]]]){
-      this.mapGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([this.point(lon,lat),this.point(lon,lat,max)]),new THREE.LineBasicMaterial({color:this.palette.edge,transparent:true,opacity:.35})));
+      this.depthFrame.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([this.point(lon,lat),this.point(lon,lat,max)]),new THREE.LineBasicMaterial({color:this.palette.edge,transparent:true,opacity:.35})));
     }
     const cities:[string,number,number][]=[['서울',126.98,37.57],['부산',129.07,35.18],['제주',126.53,33.5],['평양',125.75,39.03],['울릉도',130.9,37.48],['독도',131.87,37.24],['도쿄',139.69,35.68],['후쿠오카',130.4,33.59],['베이징',116.4,39.9],['삿포로',141.35,43.06]];
     for(const [name,lon,lat] of cities){if(lon<b[0]||lon>b[2]||lat<b[1]||lat>b[3])continue;
@@ -161,7 +163,7 @@ export class QuakeScene {
       dummy.updateMatrix();
       this.rings!.setMatrixAt(i,dummy.matrix);
     });
-    this.mesh.computeBoundingSphere();this.rings.computeBoundingSphere();this.pointsGroup.add(this.mesh,this.rings);this.select(this.selected);this.needsRender=true;
+    this.mesh.renderOrder=3;this.rings.renderOrder=3;this.mesh.computeBoundingSphere();this.rings.computeBoundingSphere();this.pointsGroup.add(this.mesh,this.rings);this.select(this.selected);this.needsRender=true;
   }
   private pick(x:number,y:number){
     const b=this.renderer.domElement.getBoundingClientRect();this.pointer.set(((x-b.left)/b.width)*2-1,-((y-b.top)/b.height)*2+1);this.ray.setFromCamera(this.pointer,this.camera);
@@ -172,14 +174,14 @@ export class QuakeScene {
   select(e:Quake|null){
     this.selected=e;this.clear(this.focusGroup);if(!e||!this.events.some(q=>q.id===e.id)){this.needsRender=true;return;}
     const p=this.point(e.lon,e.lat,e.depth??0);const radius=(this.region==='korea'?10:20)*(this.broadcast?1.3:1);
-    const ring=new THREE.Mesh(new THREE.TorusGeometry(radius,.8,6,48),new THREE.MeshBasicMaterial({color:this.palette.selection,depthTest:false,transparent:true,opacity:.9,depthWrite:false}));ring.position.copy(p);this.focusGroup.add(ring);
-    const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([p,this.point(e.lon,e.lat)]),new THREE.LineDashedMaterial({color:this.palette.selection,dashSize:5,gapSize:4,transparent:true,opacity:.65,depthTest:false}));line.computeLineDistances();this.focusGroup.add(line);
-    const highlight=new THREE.Mesh(new THREE.SphereGeometry(radius*.24,12,8),new THREE.MeshBasicMaterial({color:this.palette.selection,depthTest:false,transparent:true,opacity:.75,depthWrite:false}));highlight.position.copy(p);this.focusGroup.add(highlight);this.needsRender=true;
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(radius,.8,6,48),new THREE.MeshBasicMaterial({color:this.palette.selection,depthTest:false,transparent:true,opacity:.9,depthWrite:false}));ring.renderOrder=6;ring.position.copy(p);this.focusGroup.add(ring);
+    const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([p,this.point(e.lon,e.lat)]),new THREE.LineDashedMaterial({color:this.palette.selection,dashSize:5,gapSize:4,transparent:true,opacity:.65,depthTest:false}));line.renderOrder=6;line.computeLineDistances();this.focusGroup.add(line);
+    const highlight=new THREE.Mesh(new THREE.SphereGeometry(radius*.24,12,8),new THREE.MeshBasicMaterial({color:this.palette.selection,depthTest:false,transparent:true,opacity:.75,depthWrite:false}));highlight.renderOrder=7;highlight.position.copy(p);this.focusGroup.add(highlight);this.needsRender=true;
   }
   focus(e:Quake){this.controls.target.copy(this.point(e.lon,e.lat,e.depth??0));const d=this.region==='korea'?400:800;this.camera.position.copy(this.controls.target).add(new THREE.Vector3(d*.5,d*.6,d));this.controls.update();}
   setView(view:'oblique'|'top'|'side'){
     const aspect=Math.max(.3,this.host.clientWidth/Math.max(1,this.host.clientHeight));
-    const depth=this.region==='korea'?100:700;this.controls.target.set(0,-depth*this.scale*.4,0);
+    const depth=this.region==='korea'?100:700;this.controls.target.set(0,view==='top'?0:-depth*this.scale*.4,0);
     const offsets={oblique:new THREE.Vector3(550,1050,1250),top:new THREE.Vector3(0,1900,1),side:new THREE.Vector3(0,30,1700)};
     const direction=offsets[view].normalize();this.camera.position.copy(this.controls.target).addScaledVector(direction,this.fitDistance(direction,aspect,this.controls.target));this.controls.update();this.needsRender=true;
   }
@@ -218,6 +220,7 @@ export class QuakeScene {
     this.frame=requestAnimationFrame(this.animate);const now=performance.now(),elapsed=(now-this.last)/1000,dt=Math.min(elapsed,.1);this.last=now;if(this.hidden)return;
     this.animateTour(elapsed);this.controls.update(dt);
     if(this.needsRender||this.controls.autoRotate){
+      this.depthFrame.visible=this.controls.getPolarAngle()>.18;
       const h=this.host.clientHeight;for(const l of this.labels){const angle=this.controls.getPolarAngle();l.sprite.visible=(!l.depth||angle>.12)&&(!this.broadcast||!l.city||angle<1.35);const distance=l.sprite.position.distanceTo(this.camera.position);const height=distance*2*Math.tan(THREE.MathUtils.degToRad(this.camera.fov/2));const size=height/Math.max(h,1)*(this.broadcast?42:26);l.sprite.scale.set(size*8,size,1);}
       const ring=this.focusGroup.children[0];if(ring)ring.quaternion.copy(this.camera.quaternion);
       const north=new THREE.Vector3(0,0,-1).transformDirection(this.camera.matrixWorldInverse);

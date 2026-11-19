@@ -34,8 +34,8 @@ export function project(lon:number,lat:number,center:[number,number]):[number,nu
 }
 export function depthColor(depth:number|null):string {
   if(depth===null)return '#8d9aaf';
-  if(depth<=10)return '#59e2cf'; if(depth<=30)return '#50baf5'; if(depth<=70)return '#a39afa';
-  if(depth<=150)return '#ffc174'; if(depth<=300)return '#ff8869'; return '#ed64a6';
+  if(depth<=10)return '#168f83'; if(depth<=30)return '#167aad'; if(depth<=70)return '#7661bf';
+  if(depth<=150)return '#c88921'; if(depth<=300)return '#d56b45'; return '#bf4084';
 }
 export function csv(events:Quake[]):string {
   const safe=(v:unknown)=>'"'+String(v??'').replace(/"/g,'""').replace(/^[=+@\-]/,"'$&")+'"';
